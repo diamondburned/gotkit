@@ -212,10 +212,6 @@ func (app *Application) Run(ctx context.Context, args []string) int {
 		panic("Run given a nil context")
 	}
 
-	// TODO: make this display-bound. gtkutil has code for that.
-	cssutil.ApplyGlobalCSS()
-	cssutil.ApplyUserCSS(app.ConfigPath("user.css"))
-
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
@@ -226,7 +222,18 @@ func (app *Application) Run(ctx context.Context, args []string) int {
 		app.Quit()
 	}()
 
+	app.Application.ConnectActivate(func() {
+		// TODO: make this display-bound. gtkutil has code for that.
+		cssutil.ApplyGlobalCSS()
+		cssutil.ApplyUserCSS(app.ConfigPath("user.css"))
+	})
+
 	return app.Application.Run(args)
+}
+
+// RunMain is a convenient function around Run that uses os.Args and os.Exit.
+func (app *Application) RunMain(ctx context.Context) {
+	os.Exit(app.Run(ctx, os.Args))
 }
 
 // NewWindow creates a new Window bounded to the Application instance.
