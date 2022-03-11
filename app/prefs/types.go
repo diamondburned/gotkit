@@ -38,7 +38,7 @@ func NewBool(v bool, prop PropMeta) *Bool {
 		v: boolToUint32(v),
 	}
 
-	registerProp(b)
+	RegisterProp(b)
 	return b
 }
 
@@ -85,7 +85,7 @@ func boolToUint32(b bool) (u uint32) {
 }
 
 // CreateWidget creates a *gtk.Switch.
-func (b *Bool) CreateWidget(save func()) gtk.Widgetter {
+func (b *Bool) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
 	sw := gtk.NewSwitch()
 	sw.AddCSSClass("prefui-prop")
 	sw.AddCSSClass("prefui-prop-bool")
@@ -137,7 +137,7 @@ func NewInt(v int, meta IntMeta) *Int {
 		v: int32(v),
 	}
 
-	registerProp(b)
+	RegisterProp(b)
 	return b
 }
 
@@ -164,7 +164,7 @@ func (i *Int) UnmarshalJSON(b []byte) error {
 }
 
 // CreateWidget creates either a *gtk.Scale or a *gtk.SpinButton.
-func (i *Int) CreateWidget(save func()) gtk.Widgetter {
+func (i *Int) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
 	min := float64(i.Min)
 	max := float64(i.Max)
 	if i.Slider {
@@ -236,8 +236,7 @@ func NewString(def string, prop StringMeta) *String {
 		}
 	}
 
-	registerProp(l)
-
+	RegisterProp(l)
 	return l
 }
 
@@ -341,8 +340,7 @@ func NewEnumList(def string, prop EnumListMeta) *EnumList {
 		log.Panicf("invalid default value %q, possible: %q.", def, l.Options)
 	}
 
-	registerProp(l)
-
+	RegisterProp(l)
 	return l
 }
 

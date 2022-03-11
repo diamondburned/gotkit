@@ -19,7 +19,9 @@ import (
 // propRegistry is the global registry map.
 var propRegistry = map[ID]Prop{}
 
-func registerProp(p Prop) {
+// RegisterProp registers a property globally. This function should ideally be
+// called only during init.
+func RegisterProp(p Prop) {
 	id := p.Meta().ID()
 
 	if _, ok := propRegistry[id]; ok {
