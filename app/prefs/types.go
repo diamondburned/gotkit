@@ -3,6 +3,7 @@ package prefs
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -226,40 +227,28 @@ func (s *String) UnmarshalJSON(blob []byte) error {
 	return nil
 }
 
-/*
 // EnumList is a preference property of type stringer.
 type EnumList struct {
 	Pubsub
 	EnumListMeta
-	opts []string
-	val  fmt.Stringer
-	mut  sync.RWMutex
+	val string
+	mut sync.RWMutex
 }
 
 // EnumListMeta is the metadata of an EnumList.
 type EnumListMeta struct {
 	PropMeta
-	Options []fmt.Stringer
+	Validate func(string) error
+	Options  []string
 }
 
-// EnumString is a string type for EnumList.
-type EnumString string
-
-// String returns itself.
-func (s EnumString) String() string { return string(s) }
-
 // NewEnumList creates a new EnumList instance.
-func NewEnumList(def fmt.Stringer, prop EnumListMeta) *EnumList {
+func NewEnumList(def string, prop EnumListMeta) *EnumList {
 	l := &EnumList{
 		Pubsub:       *NewPubsub(),
 		EnumListMeta: prop,
 
-		opts: make([]string, len(prop.Options)),
-		val:  def,
-	}
-
-	for i, opt := range prop.Options {
-		l.opts[i] = opt.String()
+		val: def,
 	}
 
 	if !l.IsValid(def) {
@@ -271,14 +260,9 @@ func NewEnumList(def fmt.Stringer, prop EnumListMeta) *EnumList {
 	return l
 }
 
-// PossibleValueStrings returns the possible enum values as strings.
-func (l *EnumList) PossibleValueStrings() []string {
-	return l.opts
-}
-
 // Publish publishes the new value. If the value isn't within Options, then the
 // method will panic.
-func (l *EnumList) Publish(v fmt.Stringer) {
+func (l *EnumList) Publish(v string) {
 	if !l.IsValid(v) {
 		log.Panicf("publishing invalid value %q, possible: %q.", v, l.Options)
 	}
@@ -291,7 +275,7 @@ func (l *EnumList) Publish(v fmt.Stringer) {
 }
 
 // Value gets the current enum value.
-func (l *EnumList) Value() fmt.Stringer {
+func (l *EnumList) Value() string {
 	l.mut.RLock()
 	defer l.mut.RUnlock()
 
@@ -299,43 +283,30 @@ func (l *EnumList) Value() fmt.Stringer {
 }
 
 func (l *EnumList) MarshalJSON() ([]byte, error) {
-	return json.Marshal(l.Value().String())
+	return json.Marshal(l.Value())
 }
 
 func (l *EnumList) UnmarshalJSON(blob []byte) error {
-	l.mut.RLock()
-	// TODO: refactor this once generics come out
-	t := reflect.TypeOf(l.val)
-	l.mut.Unlock()
+	var str string
 
-	vptr := reflect.New(t)
-
-	if err := json.Unmarshal(blob, vptr.Interface()); err != nil {
-		return err
+	if err := json.Unmarshal(blob, &str); err != nil {
+		return fmt.Errorf("cannot unmarshal enum %q: %v", blob, err)
 	}
 
-	// source type is a stringerr
-	v := vptr.Elem().Interface().(fmt.Stringer)
-
-	if !l.IsValid(v) {
-		return fmt.Errorf("enum %q is not a known values", v.String())
+	if !l.IsValid(str) {
+		return fmt.Errorf("enum %q is not a known values", str)
 	}
 
-	l.Publish(v)
+	l.Publish(str)
 	return nil
 }
 
 // IsValid returns true if the given value is a valid enum value.
-func (l *EnumList) IsValid(v fmt.Stringer) bool {
-	return l.isValid(v.String())
-}
-
-func (l *EnumList) isValid(str string) bool {
-	for _, opt := range l.opts {
+func (l *EnumList) IsValid(str string) bool {
+	for _, opt := range l.Options {
 		if opt == str {
 			return true
 		}
 	}
 	return false
 }
-*/
