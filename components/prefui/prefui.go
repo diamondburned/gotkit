@@ -2,8 +2,6 @@ package prefui
 
 import (
 	"context"
-	"log"
-	"math"
 	"strings"
 	"time"
 
@@ -277,6 +275,11 @@ type propRow struct {
 	queryTerm string
 }
 
+type propWidget struct {
+	gtk.Widgetter
+	long bool
+}
+
 func newPropRow(d *Dialog, prop prefs.LocalizedProp) *propRow {
 	row := propRow{
 		// Hacky way to do case-insensitive search.
@@ -307,7 +310,10 @@ func newPropRow(d *Dialog, prop prefs.LocalizedProp) *propRow {
 		row.left.Append(row.left.desc)
 	}
 
-	row.action = newPropWidget(d, prop)
+	row.action = propWidget{
+		Widgetter: prop.CreateWidget(d.ctx, d.save),
+		long:      prop.WidgetIsLarge(),
+	}
 	gtk.BaseWidget(row.action).SetVAlign(gtk.AlignCenter)
 
 	orientation := gtk.OrientationHorizontal
@@ -326,147 +332,4 @@ func newPropRow(d *Dialog, prop prefs.LocalizedProp) *propRow {
 
 func (r *propRow) Activate() bool {
 	return gtk.BaseWidget(r.action).Activate()
-}
-
-type propWidget struct {
-	gtk.Widgetter
-	long bool
-}
-
-func newPropWidget(d *Dialog, p prefs.LocalizedProp) propWidget {
-	switch p := p.Prop.(type) {
-	case *prefs.Bool:
-		// Note: using gtk.Switch actually causes a crash using the Cairo
-		// renderer for some reason. The log goes:
-		//
-		//    2022/01/16 16:38:37 Message: Gsk: Failed to realize renderer of type 'GskNglRenderer' for surface 'GdkWaylandPopup': Failed to create EGL display
-		//    2022/01/16 16:38:37 Message: Gsk: Failed to realize renderer of type 'GskNglRenderer' for surface 'GdkWaylandToplevel': Failed to create EGL display
-		//    2022/01/16 16:38:37 Warning: Gsk: drawing failure for render node GskTextureNode: invalid matrix (not invertible)
-		//    gotktrix: cairo-surface.c:2995: _cairo_surface_create_in_error: Assertion `status < CAIRO_STATUS_LAST_STATUS' failed.
-		//    SIGABRT: abort
-		//    PC=0x7fe2a496ebaa m=3 sigcode=18446744073709551610
-		//
-		// See issue https://gitlab.gnome.org/GNOME/gtk/-/issues/4642.
-		sw := gtk.NewSwitch()
-		sw.AddCSSClass("prefui-prop")
-		sw.AddCSSClass("prefui-prop-bool")
-		bindPropWidget(d, p, sw, "notify::active", propFuncs{
-			set:     func() { sw.SetActive(p.Value()) },
-			publish: func() { p.Publish(sw.Active()) },
-		})
-		return propWidget{
-			Widgetter: sw,
-			long:      false,
-		}
-	case *prefs.Int:
-		min := float64(p.Min)
-		max := float64(p.Max)
-		if p.Slider {
-			slider := gtk.NewScaleWithRange(gtk.OrientationHorizontal, min, max, 1)
-			slider.AddCSSClass("prefui-prop")
-			slider.AddCSSClass("prefui-prop-int")
-			bindPropWidget(d, p, slider, "changed", propFuncs{
-				set:     func() { slider.SetValue(float64(p.Value())) },
-				publish: func() { p.Publish(roundInt(slider.Value())) },
-			})
-			return propWidget{
-				Widgetter: slider,
-				long:      true,
-			}
-		} else {
-			spin := gtk.NewSpinButtonWithRange(min, max, 1)
-			spin.AddCSSClass("prefui-prop")
-			spin.AddCSSClass("prefui-prop-int")
-			bindPropWidget(d, p, spin, "value-changed", propFuncs{
-				set:     func() { spin.SetValue(float64(p.Value())) },
-				publish: func() { p.Publish(spin.ValueAsInt()) },
-			})
-			return propWidget{
-				Widgetter: spin,
-				long:      false,
-			}
-		}
-	case *prefs.String:
-		// TODO: multiline
-		entry := gtk.NewEntry()
-		entry.AddCSSClass("prefui-prop")
-		entry.AddCSSClass("prefui-prop-string")
-		entry.SetWidthChars(10)
-		entry.SetPlaceholderText(locale.S(d.ctx, p.Placeholder))
-		entry.ConnectChanged(func() {
-			setEntryIcon(entry, "object-select", "")
-		})
-		bindPropWidget(d, p, entry, "activate,icon-press", propFuncs{
-			set: func() {
-				entry.SetText(p.Value())
-			},
-			publish: func() bool {
-				if err := p.Publish(entry.Text()); err != nil {
-					setEntryIcon(entry, "dialog-error", "Error: "+err.Error())
-					return false
-				} else {
-					setEntryIcon(entry, "object-select", "")
-					return true
-				}
-			},
-		})
-		return propWidget{
-			Widgetter: entry,
-			long:      true,
-		}
-	default:
-		log.Panicf("unknown property type %T", p)
-		panic("")
-	}
-}
-
-func setEntryIcon(entry *gtk.Entry, icon, text string) {
-	entry.SetIconFromIconName(gtk.EntryIconSecondary, icon)
-	entry.SetIconTooltipText(gtk.EntryIconSecondary, text)
-}
-
-func roundInt(v float64) int {
-	return int(math.Round(v))
-}
-
-type propFuncs struct {
-	set     func()
-	publish interface{}
-}
-
-func bindPropWidget(d *Dialog, p prefs.Prop, w gtk.Widgetter, changed string, funcs propFuncs) {
-	var paused bool
-
-	activate := func() {
-		if paused {
-			return
-		}
-
-		switch publish := funcs.publish.(type) {
-		case func():
-			publish()
-		case func() bool:
-			if !publish() {
-				return
-			}
-		case func() error:
-			if err := publish(); err != nil {
-				return
-			}
-		default:
-			log.Panicf("unknown publish callback type %T", publish)
-		}
-
-		d.save()
-	}
-
-	for _, signal := range strings.Split(changed, ",") {
-		w.Connect(signal, activate)
-	}
-
-	p.Pubsubber().SubscribeWidget(w, func() {
-		paused = true
-		funcs.set()
-		paused = false
-	})
 }

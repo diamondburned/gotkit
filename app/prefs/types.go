@@ -1,13 +1,18 @@
 package prefs
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/diamondburned/gotk4/pkg/gtk/v4"
+	"github.com/diamondburned/gotkit/app/locale"
 	"golang.org/x/text/message"
 )
 
@@ -79,6 +84,22 @@ func boolToUint32(b bool) (u uint32) {
 	return
 }
 
+// CreateWidget creates a *gtk.Switch.
+func (b *Bool) CreateWidget(save func()) gtk.Widgetter {
+	sw := gtk.NewSwitch()
+	sw.AddCSSClass("prefui-prop")
+	sw.AddCSSClass("prefui-prop-bool")
+	bindPropWidget(b, sw, "notify::active", propFuncs{
+		save:    save,
+		set:     func() { sw.SetActive(b.Value()) },
+		publish: func() { b.Publish(sw.Active()) },
+	})
+	return sw
+}
+
+// WidgetIsLarge returns false.
+func (b *Bool) WidgetIsLarge() bool { return false }
+
 // Int is a preference property of type int.
 type Int struct {
 	Pubsub
@@ -141,6 +162,35 @@ func (i *Int) UnmarshalJSON(b []byte) error {
 	i.Publish(v)
 	return nil
 }
+
+// CreateWidget creates either a *gtk.Scale or a *gtk.SpinButton.
+func (i *Int) CreateWidget(save func()) gtk.Widgetter {
+	min := float64(i.Min)
+	max := float64(i.Max)
+	if i.Slider {
+		slider := gtk.NewScaleWithRange(gtk.OrientationHorizontal, min, max, 1)
+		slider.AddCSSClass("prefui-prop")
+		slider.AddCSSClass("prefui-prop-int")
+		bindPropWidget(i, slider, "changed", propFuncs{
+			save:    save,
+			set:     func() { slider.SetValue(float64(i.Value())) },
+			publish: func() { i.Publish(int(math.Round(slider.Value()))) },
+		})
+		return slider
+	} else {
+		spin := gtk.NewSpinButtonWithRange(min, max, 1)
+		spin.AddCSSClass("prefui-prop")
+		spin.AddCSSClass("prefui-prop-int")
+		bindPropWidget(i, spin, "value-changed", propFuncs{
+			set:     func() { spin.SetValue(float64(i.Value())) },
+			publish: func() { i.Publish(spin.ValueAsInt()) },
+		})
+		return spin
+	}
+}
+
+// WidgetIsLarge is true if Slider is true.
+func (i *Int) WidgetIsLarge() bool { return i.Slider }
 
 // StringMeta is the metadata of a string.
 type StringMeta struct {
@@ -227,6 +277,42 @@ func (s *String) UnmarshalJSON(blob []byte) error {
 	return nil
 }
 
+// CreateWidget creates either a *gtk.Entry or a *gtk.TextView.
+func (s *String) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
+	// TODO: multiline
+	entry := gtk.NewEntry()
+	entry.AddCSSClass("prefui-prop")
+	entry.AddCSSClass("prefui-prop-string")
+	entry.SetWidthChars(10)
+	entry.SetPlaceholderText(locale.S(ctx, s.Placeholder))
+	entry.ConnectChanged(func() {
+		setEntryIcon(entry, "object-select", "")
+	})
+	bindPropWidget(s, entry, "activate,icon-press", propFuncs{
+		set: func() {
+			entry.SetText(s.Value())
+		},
+		publish: func() bool {
+			if err := s.Publish(entry.Text()); err != nil {
+				setEntryIcon(entry, "dialog-error", "Error: "+err.Error())
+				return false
+			} else {
+				setEntryIcon(entry, "object-select", "")
+				return true
+			}
+		},
+	})
+	return entry
+}
+
+// WidgetIsLarge returns true.
+func (s *String) WidgetIsLarge() bool { return true }
+
+func setEntryIcon(entry *gtk.Entry, icon, text string) {
+	entry.SetIconFromIconName(gtk.EntryIconSecondary, icon)
+	entry.SetIconTooltipText(gtk.EntryIconSecondary, text)
+}
+
 // EnumList is a preference property of type stringer.
 type EnumList struct {
 	Pubsub
@@ -309,4 +395,71 @@ func (l *EnumList) IsValid(str string) bool {
 		}
 	}
 	return false
+}
+
+// CreateWidget creates either a *gtk.Entry or a *gtk.TextView.
+func (l *EnumList) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
+	combo := gtk.NewComboBoxText()
+	combo.AddCSSClass("prefui-prop")
+	combo.AddCSSClass("prefui-prop-enumlist")
+	for _, text := range l.Options {
+		combo.Append(text, text)
+	}
+	bindPropWidget(l, combo, "changed", propFuncs{
+		save: save,
+		set: func() {
+			combo.SetActiveID(l.Value())
+		},
+		publish: func() bool {
+			l.Publish(combo.ActiveID())
+			return true
+		},
+	})
+	return combo
+}
+
+// WidgetIsLarge returns false.
+func (l *EnumList) WidgetIsLarge() bool { return false }
+
+type propFuncs struct {
+	save    func()
+	set     func()
+	publish interface{}
+}
+
+func bindPropWidget(p Prop, w gtk.Widgetter, changed string, funcs propFuncs) {
+	var paused bool
+
+	activate := func() {
+		if paused {
+			return
+		}
+
+		switch publish := funcs.publish.(type) {
+		case func():
+			publish()
+		case func() bool:
+			if !publish() {
+				return
+			}
+		case func() error:
+			if err := publish(); err != nil {
+				return
+			}
+		default:
+			log.Panicf("unknown publish callback type %T", publish)
+		}
+
+		funcs.save()
+	}
+
+	for _, signal := range strings.Split(changed, ",") {
+		w.Connect(signal, activate)
+	}
+
+	p.Pubsubber().SubscribeWidget(w, func() {
+		paused = true
+		funcs.set()
+		paused = false
+	})
 }

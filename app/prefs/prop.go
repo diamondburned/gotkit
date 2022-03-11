@@ -1,11 +1,13 @@
 package prefs
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"strings"
 	"unicode"
 
+	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -18,6 +20,11 @@ type Prop interface {
 	Meta() PropMeta
 	// Pubsubber returns the internal publisher/subscriber instance.
 	Pubsubber() *Pubsub
+	// CreateWidget creates the widget containing the value of this property.
+	CreateWidget(ctx context.Context, save func()) gtk.Widgetter
+	// WidgetIsLarge returns true if the widget created by CreateWidget should
+	// take up space and shouldn't be inlined.
+	WidgetIsLarge() bool
 }
 
 // PropMeta describes the metadata of a preference value.
