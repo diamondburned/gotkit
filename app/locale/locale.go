@@ -86,13 +86,17 @@ func Plural(ctx context.Context, one, many message.Reference, n int) string {
 // Printer is a message printer.
 type Printer = message.Printer
 
+// NullPrinter is the default printer that returns the default (probably)
+// English texts. Use it as a fallback.
+var NullPrinter = message.NewPrinter(language.Und)
+
 // FromContext returns the printer inside the context or nil.
 func FromContext(ctx context.Context) *Printer {
 	p, ok := ctx.Value(printerKey).(*Printer)
 	if ok {
 		return p
 	}
-	return nil
+	return NullPrinter
 }
 
 // doubleSpaceCollider is used for some formatted timestamps to get rid of
