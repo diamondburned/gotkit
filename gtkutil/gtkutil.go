@@ -2,6 +2,7 @@ package gtkutil
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -107,6 +108,45 @@ func RowAtY(list *gtk.ListBox, y float64) (*gtk.ListBoxRow, gtk.PositionType) {
 
 	// Default to bottom.
 	return row, gtk.PosBottom
+}
+
+// BindKeys binds the event controller returned from NewKeybinds being given the
+// map to the given widget.
+func BindKeys(w gtk.Widgetter, accelFns map[string]func() bool) {
+	base := gtk.BaseWidget(w)
+	base.AddController(NewKeybinds(accelFns))
+}
+
+// NewKeybinds binds all accelerators given in the map with their respective
+// functions to the returned EventControllerKey. If any of the accelerators are
+// invalid, then the function panics.
+func NewKeybinds(accelFns map[string]func() bool) *gtk.EventControllerKey {
+	type key struct {
+		val  uint
+		mods gdk.ModifierType
+	}
+
+	bindFns := make(map[key]func() bool, len(accelFns))
+
+	for accel, fn := range accelFns {
+		val, mods, ok := gtk.AcceleratorParse(accel)
+		if !ok {
+			log.Panicf("invalid accelerator %q", accel)
+		}
+		bindFns[key{val, mods}] = fn
+	}
+
+	controller := gtk.NewEventControllerKey()
+	controller.SetPropagationPhase(gtk.PhaseCapture)
+	controller.ConnectKeyPressed(func(val, _ uint, mods gdk.ModifierType) bool {
+		f, ok := bindFns[key{val, mods}]
+		if ok {
+			return f()
+		}
+		return false
+	})
+
+	return controller
 }
 
 // OnFirstMap attaches f to be called on the first time the widget is mapped on

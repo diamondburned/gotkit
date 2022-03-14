@@ -88,7 +88,10 @@ type Printer = message.Printer
 
 // NullPrinter is the default printer that returns the default (probably)
 // English texts. Use it as a fallback.
-var NullPrinter = message.NewPrinter(language.Und)
+var NullPrinter = message.NewPrinter(
+	language.Und,
+	message.Catalog(message.DefaultCatalog),
+)
 
 // FromContext returns the printer inside the context or nil.
 func FromContext(ctx context.Context) *Printer {

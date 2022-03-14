@@ -10,7 +10,8 @@ type funcBox struct{ f func() }
 // Pubsub provides a simple publish-subscribe API. This instance is safe to use
 // concurrently.
 type Pubsub struct {
-	funcs map[*funcBox]struct{}
+	funcs  map[*funcBox]struct{}
+	pubing bool
 }
 
 // NewPubsub creates a new Pubsub instance.
@@ -26,9 +27,16 @@ func (p *Pubsub) Pubsubber() *Pubsub { return p }
 // Publish publishes changes to all subscribe routines.
 func (p *Pubsub) Publish() {
 	gtkutil.InvokeMain(func() {
+		// Prevent infinite recursion and break up the call chain.
+		if p.pubing {
+			return
+		}
+
+		p.pubing = true
 		for f := range p.funcs {
 			f.f()
 		}
+		p.pubing = false
 	})
 }
 

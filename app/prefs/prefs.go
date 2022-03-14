@@ -12,7 +12,9 @@ import (
 
 	"github.com/diamondburned/gotkit/app"
 	"github.com/diamondburned/gotkit/app/locale"
+	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/internal/config"
+	"github.com/pkg/errors"
 	"golang.org/x/text/message"
 )
 
@@ -149,6 +151,32 @@ func (s Snapshot) Save(ctx context.Context) error {
 	return config.WriteFile(prefsPath(ctx), s.JSON())
 }
 
+// AsyncLoadSaved asynchronously loads the saved preferences.
+func AsyncLoadSaved(ctx context.Context, done func(error)) {
+	onDone := func(err error) {
+		if done != nil {
+			done(err)
+		} else if err != nil {
+			app.Error(ctx, err)
+		}
+	}
+
+	gtkutil.Async(ctx, func() func() {
+		data, err := ReadSavedData(ctx)
+		if err != nil {
+			return func() { onDone(errors.Wrap(err, "cannot read saved preferences")) }
+		}
+
+		return func() {
+			err := LoadData(data)
+			if err != nil {
+				err = errors.Wrap(err, "cannot load saved preferences")
+			}
+			onDone(err)
+		}
+	})
+}
+
 // ReadSavedData reads the saved preferences from a predetermined location.
 // Users should give the returned byte slice to LoadData. A nil byte slice is a
 // valid value.
@@ -191,7 +219,12 @@ func ListProperties(ctx context.Context) []ListedSection {
 		m[meta.Section] = append(m[meta.Section], prop)
 	}
 
-	localize := locale.SFunc(ctx)
+	localize := func(ref message.Reference) string {
+		if ref == nil {
+			return ""
+		}
+		return locale.S(ctx, ref)
+	}
 
 	sections := make([]ListedSection, 0, len(m))
 

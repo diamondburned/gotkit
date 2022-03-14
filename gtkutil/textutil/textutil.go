@@ -281,9 +281,9 @@ func HashTag(table *gtk.TextTagTable, attrs TextTag) *gtk.TextTag {
 // darkThreshold is DarkColorHasher's value.
 const darkThreshold = 0.65
 
-// rgbIsDark determines if the given RGB colors are dark or not. It takes in
+// ColorIsDark determines if the given RGB colors are dark or not. It takes in
 // colors of range [0.0, 1.0].
-func rgbIsDark(r, g, b float64) bool {
+func ColorIsDark(r, g, b float64) bool {
 	// Determine the value in the HSV colorspace. Code taken from
 	// lucasb-eyer/go-colorful.
 	v := math.Max(math.Max(r, g), b)
@@ -301,7 +301,7 @@ func IsDarkTheme(w gtk.Widgetter) bool {
 
 		bgcolor, ok := styles.LookupColor("theme_bg_color")
 		if ok {
-			darkBg = rgbIsDark(
+			darkBg = ColorIsDark(
 				float64(bgcolor.Red()),
 				float64(bgcolor.Green()),
 				float64(bgcolor.Blue()),

@@ -295,6 +295,7 @@ func newPropRow(d *Dialog, prop prefs.LocalizedProp) *propRow {
 	row.left.name = gtk.NewLabel(prop.Name)
 	row.left.name.AddCSSClass("prefui-prop-name")
 	row.left.name.SetUseMarkup(true)
+	row.left.name.SetVExpand(true)
 	row.left.name.SetXAlign(0)
 	row.left.name.SetWrap(true)
 	row.left.name.SetWrapMode(pango.WrapWordChar)

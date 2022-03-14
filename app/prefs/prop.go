@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
-	"golang.org/x/text/language"
+	"github.com/diamondburned/gotkit/app/locale"
 	"golang.org/x/text/message"
 )
 
@@ -40,16 +40,14 @@ type PropMeta struct {
 // Meta returns itself. It implements Prop.
 func (p PropMeta) Meta() PropMeta { return p }
 
-var nullPrinter = message.NewPrinter(
-	language.Und,
-	message.Catalog(message.DefaultCatalog),
-)
-
 func nolocalize(ref message.Reference) string {
+	if ref == nil {
+		return ""
+	}
 	if str, ok := ref.(string); ok {
 		return str
 	}
-	return nullPrinter.Sprint(ref)
+	return locale.NullPrinter.Sprintf(ref)
 }
 
 // PropID implements Prop.
