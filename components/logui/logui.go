@@ -27,8 +27,7 @@ func BindLogger(logger *log.Logger, buffer *Buffer) {
 	logger.SetOutput(w)
 }
 
-// BindDefaultLogger binds the default logger to the default buffer.
-func BindDefaultLogger() {
+func init() {
 	BindLogger(log.Default(), DefaultBuffer())
 }
 
