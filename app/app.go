@@ -187,14 +187,15 @@ func filterAndLogErrors(prefix string, errors []error) []error {
 	return nonNils
 }
 
-// ConnectActivate connects f to be called when Application is activated.
-func (app *Application) ConnectActivate(f func(ctx context.Context)) {
-	app.Application.ConnectActivate(func() {
-		if app.ctx == nil {
-			panic("BUG: app.ctx == nil")
-		}
-		f(app.ctx)
-	})
+// Context returns the Application's context. This context contains the
+// Application instance and will be cancelled on SIGINT once Run has been
+// called. This method will panic if it's called before Run is called. Use it
+// during initialization within signals.
+func (app *Application) Context() context.Context {
+	if app.ctx == nil {
+		panic("gotkit: Context called before Run")
+	}
+	return app.ctx
 }
 
 // Quit quits the application. The function is thread-safe.
