@@ -333,6 +333,11 @@ func CustomMenu(items []PopoverMenuItem) *gio.Menu {
 	return menu
 }
 
+// CustomMenuItems is the variadic arguments variant of CustomMenu.
+func CustomMenuItems(items ...PopoverMenuItem) *gio.Menu {
+	return CustomMenu(items)
+}
+
 func addMenuItems(menu *gio.Menu, items []PopoverMenuItem, widgets map[string]gtk.Widgetter) int {
 	section := menu
 	var added int
