@@ -65,6 +65,20 @@ func Order(props ...Prop) {
 	}
 }
 
+var hidden = make(map[Prop]bool)
+
+// Hide hides the given props from showing up in methods that snapshot
+// properties. This is useful for the main application to hide the settings of
+// certain libraries.
+//
+// Props that are hidden cannot be unhidden, so only call this method during
+// initialization on a constant list of properties.
+func Hide(props ...Prop) {
+	for _, prop := range props {
+		hidden[prop] = true
+	}
+}
+
 // TODO: scrap this routine; just sort normally and scramble the slice
 // afterwards.
 func sectionPropOrder(orders propOrder, i, j string) bool {
@@ -212,10 +226,11 @@ func ListProperties(ctx context.Context) []ListedSection {
 	m := map[message.Reference][]Prop{}
 
 	for _, prop := range propRegistry {
-		meta := prop.Meta()
-		if meta.Hidden {
+		if hidden[prop] {
 			continue
 		}
+
+		meta := prop.Meta()
 		m[meta.Section] = append(m[meta.Section], prop)
 	}
 
@@ -236,10 +251,11 @@ func ListProperties(ctx context.Context) []ListedSection {
 		}
 
 		for i, prop := range props {
-			meta := prop.Meta()
-			if meta.Hidden {
+			if hidden[prop] {
 				continue
 			}
+
+			meta := prop.Meta()
 
 			section.Props[i] = LocalizedProp{
 				Prop:        prop,

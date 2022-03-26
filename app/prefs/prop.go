@@ -32,9 +32,6 @@ type PropMeta struct {
 	Name        message.Reference
 	Section     message.Reference
 	Description message.Reference
-	// Hidden, if true, will hide the option by default. This is useful for
-	// libraries to add preferences in without hindering the user.
-	Hidden bool
 }
 
 // Meta returns itself. It implements Prop.

@@ -167,7 +167,6 @@ var ShowNotification = prefs.NewBool(true, prefs.PropMeta{
 	Section: "Application",
 	Description: "Show a notification for messages that mention the user. " +
 		"No notifications are triggered if the user is focused on the window",
-	Hidden: true,
 })
 
 // PlayNotificationSound is a preference.
@@ -175,7 +174,6 @@ var PlayNotificationSound = prefs.NewBool(true, prefs.PropMeta{
 	Name:        "Play Notification Sound",
 	Section:     "Application",
 	Description: "Play a sound every time a notification pops up.",
-	Hidden:      true,
 })
 
 func init() {
