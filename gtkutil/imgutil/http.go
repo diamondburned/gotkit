@@ -2,7 +2,6 @@ package imgutil
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,42 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/gotkit/app"
-	"github.com/gregjones/httpcache"
-	"github.com/gregjones/httpcache/diskcache"
+	"github.com/diamondburned/gotkit/gtkutil/httputil"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 )
-
-var defaultClient = &http.Client{
-	Timeout: 15 * time.Second,
-}
-
-// WithClient overrides the default HTTP client used by imgutil's HTTP
-// functions. If ctx has an *Application instance and cache is true, then the
-// Transport is wrapped.
-func WithClient(ctx context.Context, cache bool, c *http.Client) context.Context {
-	if cache {
-		c = withCache(ctx, c)
-	}
-
-	return context.WithValue(ctx, httpKey, c)
-}
-
-// withCache injects cache into the returned copy of a http.Client.
-func withCache(ctx context.Context, client *http.Client) *http.Client {
-	app := app.FromContext(ctx)
-	if app == nil {
-		return client
-	}
-
-	cpy := *client
-	cpy.Transport = &httpcache.Transport{
-		Cache:     diskcache.New(app.CachePath("img")),
-		Transport: cpy.Transport,
-	}
-	return &cpy
-}
 
 // parallelMult * 4 = maxConcurrency
 const parallelMult = 4
@@ -64,7 +31,7 @@ var (
 var errURLNotFound = errors.New("URL not found (cached)")
 
 func urlIsInvalid(url string) bool {
-	h := hashURL(url)
+	h := httputil.HashURL(url)
 
 	vt, ok := invalidURLs.Load(h)
 	if !ok {
@@ -82,14 +49,7 @@ func urlIsInvalid(url string) bool {
 }
 
 func markURLInvalid(url string) {
-	invalidURLs.Store(hashURL(url), time.Now().Unix())
-}
-
-// hashURL ensures that keys in the invalidURLs map are always 24 bytes long to
-// reduce the length that each key takes. This puts additional (but minimal)
-// strain on the GC.
-func hashURL(url string) [sha256.Size224]byte {
-	return sha256.Sum224([]byte(url))
+	invalidURLs.Store(httputil.HashURL(url), time.Now().Unix())
 }
 
 func fetch(ctx context.Context, url string) (io.ReadCloser, error) {
@@ -139,10 +99,7 @@ func fetch(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, errors.Wrapf(err, "failed to create request %q", url)
 	}
 
-	client, ok := ctx.Value(httpKey).(*http.Client)
-	if !ok {
-		client = withCache(ctx, defaultClient)
-	}
+	client := httputil.FromContext(ctx, "img")
 
 	r, err := client.Do(req)
 	if err != nil {
