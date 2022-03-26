@@ -17,6 +17,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotk4/pkg/pango"
+	"github.com/diamondburned/gotkit/app/prefs"
 	"github.com/diamondburned/gotkit/gtkutil"
 )
 
@@ -60,6 +61,32 @@ func ErrorLabel(markup string) *gtk.Label {
 	errLabel.SetCSSClasses([]string{"error"})
 	errLabel.SetAttributes(errorAttrs)
 	return errLabel
+}
+
+// TabWidth is the width of a tab character in regular monospace characters.
+var TabWidth = prefs.NewInt(4, prefs.IntMeta{
+	Name:        "Tab Width",
+	Section:     "Text",
+	Description: "The tab width in characters.",
+	Min:         0,
+	Max:         16,
+})
+
+var monospaceAttr = Attrs(
+	pango.NewAttrFamily("Monospace"),
+)
+
+// SetTabSize sets the given TextView's tab size.
+func SetTabSize(text *gtk.TextView) {
+	layout := text.CreatePangoLayout(" ")
+	layout.SetAttributes(monospaceAttr)
+
+	width, _ := layout.PixelSize()
+
+	stops := pango.NewTabArray(1, true)
+	stops.SetTab(0, pango.TabLeft, TabWidth.Value()*width)
+
+	text.SetTabs(stops)
 }
 
 // RGBHex converts the given color to a HTML hex color string. The alpha value
