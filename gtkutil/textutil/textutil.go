@@ -317,16 +317,20 @@ func ColorIsDark(r, g, b float64) bool {
 	return v <= darkThreshold
 }
 
-// IsDarkTheme returns true if the given widget is inside an application with a
-// dark theme. A dark theme implies the background color is dark. The function
-// can be called concurrently, but it shouldn't ever be.
-func IsDarkTheme(w gtk.Widgetter) bool {
+var darkStyles *gtk.StyleContext
+
+// IsDarkTheme returns true if we're inside an application with a dark theme. A
+// dark theme implies the background color is dark.
+func IsDarkTheme() bool {
 	var darkBg bool // default light theme
 
 	gtkutil.InvokeMain(func() {
-		styles := gtk.BaseWidget(w).StyleContext()
+		if darkStyles == nil {
+			w := gtk.NewLabel("")
+			darkStyles = w.StyleContext()
+		}
 
-		bgcolor, ok := styles.LookupColor("theme_bg_color")
+		bgcolor, ok := darkStyles.LookupColor("theme_bg_color")
 		if ok {
 			darkBg = ColorIsDark(
 				float64(bgcolor.Red()),
