@@ -115,6 +115,7 @@ type IntMeta struct {
 	Min         int
 	Max         int
 	Slider      bool
+	Hidden      bool
 }
 
 // Meta returns the PropMeta for IntMeta. It implements Prop.
@@ -123,6 +124,7 @@ func (m IntMeta) Meta() PropMeta {
 		Name:        m.Name,
 		Section:     m.Section,
 		Description: m.Description,
+		Hidden:      m.Hidden,
 	}
 }
 
@@ -200,6 +202,7 @@ type StringMeta struct {
 	Placeholder message.Reference
 	Validate    func(string) error
 	Multiline   bool
+	Hidden      bool
 }
 
 // Meta returns the PropMeta for StringMeta. It implements Prop.
@@ -208,6 +211,7 @@ func (m StringMeta) Meta() PropMeta {
 		Name:        m.Name,
 		Section:     m.Section,
 		Description: m.Description,
+		Hidden:      m.Hidden,
 	}
 }
 
