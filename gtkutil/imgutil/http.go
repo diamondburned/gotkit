@@ -14,6 +14,10 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+var defaultClient = &http.Client{
+	Timeout: 15 * time.Second,
+}
+
 // parallelMult * 4 = maxConcurrency
 const parallelMult = 4
 
@@ -99,7 +103,7 @@ func fetch(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, errors.Wrapf(err, "failed to create request %q", url)
 	}
 
-	client := httputil.FromContext(ctx, "img")
+	client := httputil.FromContext(ctx, defaultClient, "img")
 
 	r, err := client.Do(req)
 	if err != nil {
