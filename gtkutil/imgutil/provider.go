@@ -29,6 +29,26 @@ func DoProviderURL(ctx context.Context, p Provider, uri string, f func(*gdkpixbu
 	p.Do(ctx, url, f)
 }
 
+const sizeFragmentf = "%dx%d"
+
+// AppendURLSize appends into the URL fragments the width and height parameters.
+// Providers that support these fragments will be able to read them.
+func AppendURLSize(urlstr string, w, h int) string {
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		return urlstr
+	}
+	u.Fragment = fmt.Sprintf(sizeFragmentf, w, h)
+	return u.String()
+}
+
+// ParseURLSize parses the optional width and height fragments from the URL. If
+// the URL has none, then (0, 0) is returned.
+func ParseURLSize(url *url.URL) (w, h int) {
+	fmt.Sscanf(url.Fragment, sizeFragmentf, &w, &h)
+	return
+}
+
 // Providers holds multiple providers. A Providers instance is also a Provider
 // in itself.
 type Providers map[string]Provider
