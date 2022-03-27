@@ -20,8 +20,8 @@ var sounds embed.FS
 
 // Sound IDs.
 const (
-	Bell    = "bell.opus"
-	Message = "message.opus"
+	Bell    = "bell"
+	Message = "message"
 )
 
 type mediaFile struct {
