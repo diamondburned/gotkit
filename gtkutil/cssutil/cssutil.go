@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"text/template"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
@@ -16,6 +17,42 @@ var globalCSS = func() *strings.Builder {
 	b.Grow(50 << 10) // 50KB
 	return &b
 }()
+
+var globalVariables = template.FuncMap{}
+
+// AddCSSVariables adds the variables from the given map into the global
+// variables map. This function must be called before ApplyGlobalCSS is called
+// for it to have an effect.
+//
+// To use a variable, use the {$variable} syntax.
+func AddCSSVariables(vars map[string]string) {
+	for k, v := range vars {
+		k := k
+		v := v
+
+		globalVariables[k] = func() string { return v }
+	}
+}
+
+func templateCSS(name, css string) string {
+	var err error
+
+	t := template.New("")
+	t.Delims("{$", "}")
+	t.Funcs(globalVariables)
+
+	t, err = t.Parse(globalCSS.String())
+	if err != nil {
+		log.Panicf("cannot parse CSS template %s: %v", name, err)
+	}
+
+	var tmplOutput strings.Builder
+	if err := t.Execute(&tmplOutput, nil); err != nil {
+		log.Panicf("cannot render CSS template %s: %v", name, err)
+	}
+
+	return tmplOutput.String()
+}
 
 // Applier returns a constructor that applies a class to the given widgetter. It
 // also writes the CSS to the global CSS.
@@ -60,10 +97,6 @@ func WriteCSS(css string) struct{} {
 	return struct{}{}
 }
 
-var _ = WriteCSS(`
-	avatar { border-radius: 999px; }
-`)
-
 // AddClass adds classes.
 func AddClass(w gtk.Widgetter, classes ...string) {
 	ctx := gtk.BaseWidget(w).StyleContext()
@@ -74,7 +107,7 @@ func AddClass(w gtk.Widgetter, classes ...string) {
 
 // ApplyGlobalCSS applies the current global CSS to the default display.
 func ApplyGlobalCSS() {
-	globalCSS := globalCSS.String()
+	globalCSS := templateCSS("global", globalCSS.String())
 
 	prov := gtk.NewCSSProvider()
 	prov.ConnectParsingError(func(sec *gtk.CSSSection, err error) {
@@ -99,6 +132,8 @@ func ApplyUserCSS(path string) {
 	}
 
 	if userCSS := string(f); userCSS != "" {
+		userCSS = templateCSS("user.css", userCSS)
+
 		prov := gtk.NewCSSProvider()
 		prov.LoadFromData(userCSS)
 
