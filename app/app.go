@@ -93,6 +93,12 @@ func NewWithFlags(appID, appName string, flags gio.ApplicationFlags) *Applicatio
 		name:        appName,
 	}
 
+	app.Application.ConnectStartup(func() {
+		// TODO: make this display-bound. gtkutil has code for that.
+		cssutil.ApplyGlobalCSS()
+		cssutil.ApplyUserCSS(app.ConfigPath("user.css"))
+	})
+
 	app.cacheDir = newLazyString(func() string {
 		d, err := os.UserCacheDir()
 		if err != nil {
@@ -222,12 +228,6 @@ func (app *Application) Run(ctx context.Context, args []string) int {
 		<-ctx.Done()
 		app.Quit()
 	}()
-
-	app.Application.ConnectActivate(func() {
-		// TODO: make this display-bound. gtkutil has code for that.
-		cssutil.ApplyGlobalCSS()
-		cssutil.ApplyUserCSS(app.ConfigPath("user.css"))
-	})
 
 	return app.Application.Run(args)
 }
