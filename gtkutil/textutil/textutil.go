@@ -211,6 +211,20 @@ func (m TextTagsMap) FromTable(table *gtk.TextTagTable, name string) *gtk.TextTa
 // automatically.
 type TextTag map[string]interface{}
 
+// FromTable gets the tag with the given name from the given table, else it'll
+// make a new tag with the attributes from TextTag.
+func (t TextTag) FromTable(table *gtk.TextTagTable, name string) *gtk.TextTag {
+	tag := table.Lookup(name)
+	if tag != nil {
+		return tag
+	}
+
+	tag = t.Tag(name)
+	table.Add(tag)
+
+	return tag
+}
+
 // Tag creates a new text tag from the attributes.
 func (t TextTag) Tag(name string) *gtk.TextTag {
 	if isInternalKey(name) {
