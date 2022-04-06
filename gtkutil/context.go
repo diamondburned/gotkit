@@ -130,6 +130,14 @@ func (r *renewFns) add(ctx context.Context, f func(context.Context) func()) *fun
 		r.renewFn[k] = nil
 	}
 
+	// Account for race condition.
+	if ctx.Err() != nil {
+		if cancel := r.renewFn[k]; cancel != nil {
+			cancel()
+			r.renewFn[k] = nil
+		}
+	}
+
 	return k
 }
 
@@ -151,12 +159,11 @@ func (r *renewFns) remove(k *funcKey) {
 func WithVisibility(ctx context.Context, widget gtk.Widgetter) Canceller {
 	c := WithCanceller(ctx)
 	w := gtk.BaseWidget(widget)
-	if !w.Mapped() && !w.Realized() {
+	if !w.Mapped() {
 		c.Cancel()
 	}
 	w.ConnectMap(c.Renew)
-	w.ConnectRealize(c.Renew)
-	w.ConnectUnrealize(c.Cancel)
+	w.ConnectUnmap(c.Cancel)
 	return c
 }
 
