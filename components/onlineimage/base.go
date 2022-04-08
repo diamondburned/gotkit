@@ -79,9 +79,6 @@ func (b *baseImage) fetch(ctx context.Context) {
 		return
 	}
 
-	// Inject the rescaling size option.
-	ctx = imgutil.WithOpts(ctx, imgutil.WithRescale(b.scaler.ParentSize()))
-
 	imgutil.DoProviderURL(ctx, b.prov, url, func(p *gdkpixbuf.Pixbuf) {
 		b.ok = true
 		b.scaler.SetFromPixbuf(p)

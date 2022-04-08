@@ -54,7 +54,7 @@ func (p *pixbufScaler) init(parent *baseImage) {
 
 	base := gtk.BaseWidget(parent)
 	base.NotifyProperty("scale-factor", func() {
-		gtkutil.SetScaleFactor(gtk.BaseWidget(p.parent).ScaleFactor())
+		gtkutil.SetScaleFactor(base.ScaleFactor())
 		p.Invalidate()
 	})
 }
@@ -111,7 +111,7 @@ func (p *pixbufScaler) invalidate(newPixbuf bool) {
 	pixbuf := p.scales[scale-1]
 
 	if pixbuf == nil {
-		if srcW == dstW || srcH == dstH {
+		if dstW == srcW && dstH == srcH {
 			// Scaling is the same either way, so just use this for the current
 			// scaling. This saves memory on most machines with only 1 scaling.
 			pixbuf = p.src

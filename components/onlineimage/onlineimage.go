@@ -38,6 +38,12 @@ func (a *Avatar) SetFromURL(url string) {
 	a.base.SetFromURL(url)
 }
 
+// SetSizeRequest sets the avatar size.
+func (a *Avatar) SetSizeRequest(size int) {
+	a.Avatar.SetSizeRequest(size)
+	a.base.scaler.Invalidate()
+}
+
 func (a *Avatar) setFromPixbuf(p *gdkpixbuf.Pixbuf) {
 	a.SetFromPixbuf(p)
 }
@@ -62,6 +68,12 @@ func (i *Image) SetFromURL(url string) {
 	i.base.SetFromURL(url)
 }
 
+// SetSizeRequest sets the minimum size of a widget.
+func (i *Image) SetSizeRequest(w, h int) {
+	i.Image.SetSizeRequest(w, h)
+	i.base.scaler.Invalidate()
+}
+
 func (i *Image) setFromPixbuf(p *gdkpixbuf.Pixbuf) {
 	i.SetFromPixbuf(p)
 }
@@ -84,6 +96,12 @@ func NewPicture(ctx context.Context, prov imgutil.Provider) *Picture {
 // SetURL sets the Avatar's URL.
 func (p *Picture) SetURL(url string) {
 	p.base.SetFromURL(url)
+}
+
+// SetSizeRequest sets the minimum size of a widget.
+func (p *Picture) SetSizeRequest(w, h int) {
+	p.Picture.SetSizeRequest(w, h)
+	p.base.scaler.Invalidate()
 }
 
 func (p *Picture) setFromPixbuf(pixbuf *gdkpixbuf.Pixbuf) {

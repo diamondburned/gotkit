@@ -145,3 +145,14 @@ func (p fileProvider) Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pi
 		})
 	}()
 }
+
+// PixbufFromFile creates a pixbuf from the given file path. It scales using the
+// given options.
+func PixbufFromFile(o *Opts, path string) (*gdkpixbuf.Pixbuf, error) {
+	// Fast path with no size.
+	if w, h := o.Size(); w == 0 && h == 0 {
+		return gdkpixbuf.NewPixbufFromFile(path)
+	} else {
+		return gdkpixbuf.NewPixbufFromFileAtScale(path, w, h, true)
+	}
+}
