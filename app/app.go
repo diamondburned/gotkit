@@ -134,6 +134,12 @@ func NewWithFlags(appID, appName string, flags gio.ApplicationFlags) *Applicatio
 	return app
 }
 
+func (app *Application) assert() {
+	if app == nil {
+		panic("app == nil")
+	}
+}
+
 // Error calls Error on the application inside the context. It panics if the
 // context does not have the application.
 func Error(ctx context.Context, errs ...error) {
@@ -313,11 +319,13 @@ func (app *Application) SuffixedTitle(title string) string {
 // ConfigPath returns the path to the configuration directory with the given
 // tails appended. If the path fails, then the function panics.
 func (app *Application) ConfigPath(tails ...string) string {
+	app.assert()
 	return joinTails(app.configPath.v(), tails)
 }
 
 // CacheDir returns the path to the cache directory of the application.
 func (app *Application) CachePath(tails ...string) string {
+	app.assert()
 	return joinTails(app.cacheDir.v(), tails)
 }
 

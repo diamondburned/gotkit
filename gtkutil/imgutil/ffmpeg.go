@@ -2,12 +2,9 @@ package imgutil
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/base64"
 	"log"
 	"net/url"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -99,32 +96,29 @@ func FFmpegThumbnail(ctx context.Context, format, url string) (string, error) {
 
 	app := app.FromContext(ctx)
 	thumbDir := app.CachePath("thumbnails")
-	thumbDst := thumbnailPath(thumbDir, url, "")
+	thumbDst := urlPath(thumbDir, url)
 
-	return cachegc.WithTmp(
-		thumbDst, "*."+format,
-		func(out string) error {
-			cachegc.Do(thumbDir, 24*time.Hour)
-			return doFFmpeg(ctx, url, out, "-frames:v", "1", "-f", "image2")
-		},
-	)
-}
+	if cachegc.IsFile(thumbDst) {
+		return thumbDst, nil
+	}
 
-func thumbnailPath(baseDir, url, fragment string) string {
-	b := sha1.Sum([]byte(url + "#" + fragment))
-	f := base64.URLEncoding.EncodeToString(b[:])
-	return filepath.Join(baseDir, f)
+	if err := ffmpegSema.Acquire(ctx, 1); err != nil {
+		return thumbDst, err
+	}
+	defer ffmpegSema.Release(1)
+
+	err := cachegc.WithTmp(thumbDst, "*."+format, func(out string) error {
+		return doFFmpeg(ctx, url, out, "-frames:v", "1", "-f", "image2")
+	})
+
+	cachegc.Do(thumbDir, CacheAge)
+	return thumbDst, err
 }
 
 var ffmpegSema = semaphore.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
 
 func doFFmpeg(ctx context.Context, src, dst string, opts ...string) error {
-	if err := ffmpegSema.Acquire(ctx, 1); err != nil {
-		return err
-	}
-	defer ffmpegSema.Release(1)
-
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	args := make([]string, 0, len(opts)+10)
@@ -134,8 +128,12 @@ func doFFmpeg(ctx context.Context, src, dst string, opts ...string) error {
 
 	if err := exec.CommandContext(ctx, "ffmpeg", args...).Run(); err != nil {
 		var exitErr *exec.ExitError
+
 		if errors.As(err, &exitErr) {
-			log.Println("ffmpeg error:", string(exitErr.Stderr))
+			log.Printf(
+				"ffmpeg exited with status %d, error: %s",
+				exitErr.ExitCode(), string(exitErr.Stderr),
+			)
 		}
 
 		return err

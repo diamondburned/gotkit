@@ -74,8 +74,8 @@ func (c *cacheGC) do(path string, age time.Duration) {
 	}()
 }
 
-// isFile returns true if the given path exists as a file.
-func isFile(path string) bool {
+// IsFile returns true if the given path exists as a file.
+func IsFile(path string) bool {
 	s, err := os.Stat(path)
 	if err != nil {
 		return false
@@ -83,33 +83,58 @@ func isFile(path string) bool {
 	return !s.IsDir()
 }
 
+// cacheError is an error that wraps erros that happen during caching.
+type cacheError struct {
+	Err error
+	Msg string
+}
+
+// Error implements error.
+func (err cacheError) Error() string {
+	return err.Msg + ": " + err.Err.Error()
+}
+
+func (err cacheError) Unwrap() error { return err.Err }
+
+// IsCacheError returns true if the error happened while caching.
+func IsCacheError(err error) bool {
+	var cacheErr cacheError
+	return errors.As(err, &cacheErr)
+}
+
 // WithTmp gives f a premade tmp file and moves it back atomically.
-func WithTmp(dst, pattern string, fn func(path string) error) (string, error) {
-	if isFile(dst) {
-		return dst, nil
+func WithTmp(dst, pattern string, fn func(path string) error) error {
+	return WithTmpFile(dst, pattern, func(f *os.File) error {
+		return fn(f.Name())
+	})
+}
+
+// WithTmpFile gives f a premade tmp os.File and moves it back atomically.
+func WithTmpFile(dst, pattern string, fn func(*os.File) error) error {
+	if IsFile(dst) {
+		return nil
 	}
 
 	dir := filepath.Dir(dst)
 
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return "", errors.Wrap(err, "cannot mkdir -p")
+		return cacheError{err, "cannot mkdir -p"}
 	}
 
 	f, err := os.CreateTemp(dir, ".tmp."+pattern)
 	if err != nil {
-		return "", errors.Wrap(err, "cannot mktemp")
+		return cacheError{err, "cannot mktemp"}
 	}
-	f.Close()
-
+	defer f.Close()
 	defer os.Remove(f.Name())
 
-	if err := fn(f.Name()); err != nil {
-		return "", err
+	if err := fn(f); err != nil {
+		return err
 	}
 
 	if err := os.Rename(f.Name(), dst); err != nil {
-		return "", errors.Wrap(err, "cannot rename tmp file")
+		return cacheError{err, "cannot rename temp file"}
 	}
 
-	return dst, nil
+	return nil
 }

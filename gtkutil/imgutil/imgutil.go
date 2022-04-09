@@ -303,18 +303,7 @@ func getPixbuf(ctx context.Context, url string, o Opts) (*gdkpixbuf.Pixbuf, erro
 		return nil, errors.New("empty URL given")
 	}
 
-	r, err := fetch(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-
-	p, err := readPixbuf(r, o)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read %q", url)
-	}
-
-	return p, nil
+	return fetchPixbuf(ctx, url, o)
 }
 
 func do(ctx context.Context, o Opts, async bool, do func() (func(), error)) {
@@ -373,6 +362,37 @@ func readPixbuf(r io.Reader, o Opts) (*gdkpixbuf.Pixbuf, error) {
 	pixbuf := loader.Pixbuf()
 	if pixbuf == nil {
 		return nil, errNilPixbuf
+	}
+
+	return pixbuf, nil
+}
+
+func loadPixbufFromFile(path string, o Opts) (*gdkpixbuf.Pixbuf, error) {
+	var pixbuf *gdkpixbuf.Pixbuf
+	var err error
+
+	if o.w > 0 && o.h > 0 {
+		pixbuf, err = gdkpixbuf.NewPixbufFromFileAtScale(path, o.w, o.h, true)
+	} else {
+		pixbuf, err = gdkpixbuf.NewPixbufFromFile(path)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if o.sizer.set != nil {
+		maxW, maxH := o.sizer.w, o.sizer.h
+		if maxW == 0 && maxH == 0 {
+			maxW, maxH = o.sizer.set.SizeRequest()
+		}
+		if maxW == 0 && maxH == 0 {
+			maxW, maxH = o.w, o.h
+		}
+
+		w := pixbuf.Width()
+		h := pixbuf.Height()
+		o.sizer.set.SetSizeRequest(MaxSize(w, h, maxW, maxH))
 	}
 
 	return pixbuf, nil

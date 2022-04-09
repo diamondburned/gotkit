@@ -2,7 +2,8 @@ package httputil
 
 import (
 	"context"
-	"crypto/sha256"
+	"crypto/sha1"
+	"encoding/base64"
 	"net/http"
 
 	"github.com/diamondburned/gotkit/app"
@@ -36,8 +37,10 @@ func FromContext(ctx context.Context, client *http.Client, cache string) *http.C
 		client = cli
 	}
 
-	if should, ok := ctx.Value(shouldCacheKey).(bool); !ok || should {
-		client = injectCache(ctx, client, cache)
+	if cache != "" {
+		if should, ok := ctx.Value(shouldCacheKey).(bool); !ok || should {
+			client = injectCache(ctx, client, cache)
+		}
 	}
 
 	return client
@@ -59,9 +62,18 @@ func injectCache(ctx context.Context, client *http.Client, cache string) *http.C
 	return &cpy
 }
 
-// HashURL ensures that keys in the invalidURLs map are always 24 bytes long to
-// reduce the length that each key takes. This puts additional (but minimal)
-// strain on the GC.
-func HashURL(url string) [sha256.Size224]byte {
-	return sha256.Sum224([]byte(url))
+// Some interesting benchmark results:
+//
+//    cpu: Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz
+//    BenchmarkMD5-8             523683              2185 ns/op         468.58 MB/s
+//    BenchmarkSHA1-8            583852              1835 ns/op         558.12 MB/s
+//    BenchmarkSHA224-8          301488              4047 ns/op         253.03 MB/s
+//    BenchmarkSHA256-8          272781              4051 ns/op         252.78 MB/s
+//
+// SHA1 is actually faster than MD5 on this CPU, likely because of AVX2.
+
+// HashURL hashes the given URL into a 28-byte string.
+func HashURL(url string) string {
+	hash := sha1.Sum([]byte(url))
+	return base64.URLEncoding.EncodeToString(hash[:])
 }
