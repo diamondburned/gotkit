@@ -91,7 +91,7 @@ func fetchPixbuf(ctx context.Context, url string, o Opts) (*gdkpixbuf.Pixbuf, er
 	if cachegc.IsCacheError(err) {
 		log.Println("cache error, falling back to HTTP:", err)
 
-		r, err := getBody(ctx, url, true)
+		r, err := getBody(ctx, url)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +156,7 @@ func fetch(ctx context.Context, url, cacheDst string) error {
 }
 
 func downloadTo(ctx context.Context, url string, w io.Writer) error {
-	r, err := getBody(ctx, url, false)
+	r, err := getBody(ctx, url)
 	if err != nil {
 		return err
 	}
@@ -169,17 +169,13 @@ func downloadTo(ctx context.Context, url string, w io.Writer) error {
 	return nil
 }
 
-func getBody(ctx context.Context, url string, cached bool) (io.ReadCloser, error) {
+func getBody(ctx context.Context, url string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create request %q", url)
 	}
 
-	cache := ""
-	if cached {
-		cache = "img"
-	}
-	client := httputil.FromContext(ctx, defaultClient, cache)
+	client := httputil.FromContext(ctx, defaultClient)
 
 	r, err := client.Do(req)
 	if err != nil {
