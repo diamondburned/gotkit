@@ -203,3 +203,8 @@ func (n *Notification) Send(app *app.Application) {
 		app.SendNotification(string(n.ID), n.asGio())
 	}
 }
+
+// Send is a convenient function.
+func Send(ctx context.Context, n Notification) {
+	n.Send(app.FromContext(ctx))
+}
