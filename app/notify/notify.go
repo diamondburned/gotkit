@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/gotkit/app"
 	"github.com/diamondburned/gotkit/app/prefs"
 	"github.com/diamondburned/gotkit/app/sounds"
+	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
 )
 
@@ -133,6 +134,14 @@ func HashID(keys ...interface{}) ID {
 type Action struct {
 	ActionID string
 	Argument *glib.Variant
+}
+
+// ActionJSONData creates a new Action from the given data.
+func ActionJSONData(id string, data interface{}) Action {
+	return Action{
+		ActionID: id,
+		Argument: gtkutil.NewJSONVariant(data),
+	}
 }
 
 // Notification is a data structure for a notification. A GNotification object
