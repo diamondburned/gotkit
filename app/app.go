@@ -271,6 +271,21 @@ func (app *Application) AddActions(m map[string]func()) {
 	}
 }
 
+// AddJSONActions adds the given map of action functions with parameters into
+// the Application. The value of the map is a function of type `func(T)`, where
+// T is any type that is JSON-encoded using gtkutil.NewJSONVariant.
+func (app *Application) AddJSONActions(m map[string]interface{}) {
+	for name, fn := range m {
+		name = strings.TrimPrefix(name, "app.")
+
+		v := gtkutil.NewJSONActionCallback(fn)
+
+		action := gio.NewSimpleAction(name, v.ArgType)
+		action.ConnectActivate(v.Func)
+		app.AddAction(action)
+	}
+}
+
 // AddActionCallbacks is the ActionCallback variant of AddActions.
 func (app *Application) AddActionCallbacks(m map[string]gtkutil.ActionCallback) {
 	for name, callback := range m {
