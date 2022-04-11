@@ -16,63 +16,89 @@ import (
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
 )
 
-// MaxIconSize is the maximum size of the notification icon to give to
-// the gio.Icon.
-const MaxIconSize = 64
-
 // Icon is a type for a notification icon.
 type Icon interface {
 	async() bool
 	icon() gio.Iconner // can return nil
 }
 
+type iconName string
+
 // IconName is a notification icon that follows the system icon
 // theme.
-type IconName string
+func IconName(name string) Icon { return iconName(name) }
 
-func (n IconName) async() bool { return false }
+func (n iconName) async() bool { return false }
 
-func (n IconName) icon() gio.Iconner {
+func (n iconName) icon() gio.Iconner {
 	if n == "" {
 		return nil
 	}
 	return gio.NewThemedIcon(string(n))
 }
 
-// IconURL is a notification icon that is an image fetched online.
-// The image is fetched using imgutil.GETPixbuf.
-type IconURL struct {
-	Context      context.Context
-	URL          string // if empty, will use fallback
-	FallbackIcon IconName
+// MaxIconSize is the maximum size of the notification icon to give to
+// the gio.Icon.
+const MaxIconSize = 64
+
+type iconURL struct {
+	fallbackIcon iconName
+	loadingIcon  <-chan *gio.BytesIcon
+	finishedIcon *gio.BytesIcon
 }
 
-func (n IconURL) async() bool {
-	return n.URL != ""
+// IconURL creates a notification icon that is an image fetched online. The
+// image is fetched using imgutil.GETPixbuf.
+func IconURL(ctx context.Context, url string, fallback iconName) Icon {
+	if url == "" {
+		return fallback
+	}
+
+	loadingIcon := make(chan *gio.BytesIcon, 1)
+	go func() {
+		defer close(loadingIcon)
+
+		ctx := imgutil.WithOpts(ctx,
+			imgutil.WithRescale(MaxIconSize, MaxIconSize),
+		)
+
+		p, err := imgutil.GETPixbuf(ctx, url)
+		if err != nil {
+			log.Println("cannot GET notification icon URL:", err)
+			return
+		}
+
+		b, err := p.SaveToBufferv("png", []string{"compression"}, []string{"0"})
+		if err != nil {
+			log.Println("cannot save notification icon URL as PNG:", err)
+			return
+		}
+
+		loadingIcon <- gio.NewBytesIcon(glib.NewBytesWithGo(b))
+	}()
+
+	return iconURL{
+		fallbackIcon: fallback,
+		loadingIcon:  loadingIcon,
+	}
 }
 
-func (n IconURL) icon() gio.Iconner {
-	if n.URL == "" {
-		return n.FallbackIcon.icon()
+func (n iconURL) async() bool {
+	return true
+}
+
+func (n iconURL) icon() gio.Iconner {
+	if n.finishedIcon != nil {
+		return n.finishedIcon
 	}
 
-	ctx := imgutil.WithOpts(n.Context,
-		imgutil.WithRescale(MaxIconSize, MaxIconSize),
-	)
-
-	p, err := imgutil.GETPixbuf(ctx, n.URL)
-	if err != nil {
-		log.Println("cannot GET notification icon URL:", err)
-		return n.FallbackIcon.icon()
+	icon, ok := <-n.loadingIcon
+	if ok {
+		n.finishedIcon = icon
+		return n.finishedIcon
 	}
 
-	b, err := p.SaveToBufferv("png", []string{"compression"}, []string{"0"})
-	if err != nil {
-		log.Println("cannot save notification icon URL as PNG:", err)
-		return n.FallbackIcon.icon()
-	}
-
-	return gio.NewBytesIcon(glib.NewBytesWithGo(b))
+	return n.fallbackIcon.icon()
 }
 
 // Sound is a type for a notification sound.
