@@ -224,6 +224,17 @@ func BindSubscribe(widget gtk.Widgetter, f func() (unsub func())) {
 	})
 }
 
+// NotifyProperty calls f everytime the object's property changes until it
+// returns true.
+func NotifyProperty(obj glib.Objector, property string, f func() bool) {
+	var signal glib.SignalHandle
+	signal = obj.NotifyProperty(property, func() {
+		if f() {
+			obj.HandlerDisconnect(signal)
+		}
+	})
+}
+
 var mainThread = glib.MainContextDefault()
 
 // InvokeMain invokes f in the main loop. It is useful in global helper
