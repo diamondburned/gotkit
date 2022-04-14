@@ -110,6 +110,38 @@ func RowAtY(list *gtk.ListBox, y float64) (*gtk.ListBoxRow, gtk.PositionType) {
 	return row, gtk.PosBottom
 }
 
+// WalkWidget walks w and its children recursively down the widget tree.
+func WalkWidget(w gtk.Widgetter, f func(w gtk.Widgetter) bool) {
+	if w == nil || f(w) {
+		return
+	}
+
+	walkSiblings(gtk.BaseWidget(w).FirstChild(), f)
+}
+
+func walkSiblings(w gtk.Widgetter, f func(w gtk.Widgetter) bool) {
+	for w != nil {
+		WalkWidget(w, f)
+		w = gtk.BaseWidget(w).NextSibling()
+	}
+}
+
+// EachChild iterates over w's children.
+func EachChild(w gtk.Widgetter, f func(child gtk.Widgetter) bool) {
+	if w == nil {
+		return
+	}
+
+	w = gtk.BaseWidget(w).FirstChild()
+
+	for w != nil {
+		if f(w) {
+			return
+		}
+		w = gtk.BaseWidget(w).NextSibling()
+	}
+}
+
 // BindKeys binds the event controller returned from NewKeybinds being given the
 // map to the given widget.
 func BindKeys(w gtk.Widgetter, accelFns map[string]func() bool) {
