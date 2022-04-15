@@ -24,6 +24,12 @@ func (c *AnimationController) Stop() {
 	(*baseImage)(c).stopAnimation()
 }
 
+// OnHover binds the controller to a motion controller attached to the image
+// widget. When the user hovers over the image, the animation plays.
+func (c *AnimationController) OnHover() {
+	c.ConnectMotion(c.imageParent)
+}
+
 // ConnectMotion connects a motion controller to the given widget that will
 // activate the animation when it's hovered over (entered).
 func (c *AnimationController) ConnectMotion(w gtk.Widgetter) {
