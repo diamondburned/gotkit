@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotkit/app"
@@ -63,19 +64,17 @@ func IconURL(ctx context.Context, url string, fallback iconName) Icon {
 			imgutil.WithRescale(MaxIconSize, MaxIconSize),
 		)
 
-		p, err := imgutil.GETPixbuf(ctx, url)
-		if err != nil {
-			log.Println("cannot GET notification icon URL:", err)
-			return
-		}
+		imgutil.GET(ctx, url, imgutil.ImageSetter{
+			SetFromPixbuf: func(p *gdkpixbuf.Pixbuf) {
+				b, err := p.SaveToBufferv("png", []string{"compression"}, []string{"0"})
+				if err != nil {
+					log.Println("cannot save notification icon URL as PNG:", err)
+					return
+				}
 
-		b, err := p.SaveToBufferv("png", []string{"compression"}, []string{"0"})
-		if err != nil {
-			log.Println("cannot save notification icon URL as PNG:", err)
-			return
-		}
-
-		loadingIcon <- gio.NewBytesIcon(glib.NewBytesWithGo(b))
+				loadingIcon <- gio.NewBytesIcon(glib.NewBytesWithGo(b))
+			},
+		})
 	}()
 
 	return iconURL{

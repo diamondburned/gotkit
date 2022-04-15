@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotkit/app"
@@ -39,7 +40,7 @@ func (p FFmpegOpts) Schemes() []string {
 }
 
 // Do implements Provider.
-func (p FFmpegOpts) Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pixbuf)) {
+func (p FFmpegOpts) Do(ctx context.Context, url *url.URL, img ImageSetter) {
 	go func() {
 		o := OptsFromContext(ctx)
 
@@ -67,7 +68,13 @@ func (p FFmpegOpts) Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pixb
 			case <-ctx.Done():
 				o.Error(ctx.Err())
 			default:
-				f(p)
+			}
+
+			switch {
+			case img.SetFromPixbuf != nil:
+				img.SetFromPixbuf(p)
+			case img.SetFromPaintable != nil:
+				img.SetFromPaintable(gdk.NewTextureForPixbuf(p))
 			}
 		})
 	}()
