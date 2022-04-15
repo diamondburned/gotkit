@@ -116,10 +116,11 @@ func (b *baseImage) fetch(ctx context.Context) {
 }
 
 func (b *baseImage) enableAnimation() *AnimationController {
-	b.animate = true
-
-	base := gtk.BaseWidget(b.imageParent)
-	base.ConnectUnmap(b.stopAnimation)
+	if CanAnimate {
+		b.animate = true
+		base := gtk.BaseWidget(b.imageParent)
+		base.ConnectUnmap(b.stopAnimation)
+	}
 
 	return (*AnimationController)(b)
 }

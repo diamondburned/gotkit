@@ -11,6 +11,10 @@ import (
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
 )
 
+// CanAnimate is true by default, which allows EnableAnimation to be called on
+// certain images to allow animations to be played back.
+var CanAnimate = true
+
 type AnimationController baseImage
 
 // Start starts the animation playback in the background. The animation isn't
