@@ -1,6 +1,8 @@
 package onlineimage
 
 import (
+	"log"
+
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil"
@@ -47,6 +49,10 @@ func (p *pixbufScaler) ParentSize() (w, h int) {
 }
 
 func (p *pixbufScaler) init(parent *baseImage) {
+	if parent.set().SetFromPixbuf == nil {
+		log.Panicf("pixbufScaer: baseImage %T missing SetFromPixbuf", parent.imageParent)
+	}
+
 	w, h := parent.size()
 
 	p.parent = parent
@@ -59,12 +65,17 @@ func (p *pixbufScaler) init(parent *baseImage) {
 	})
 }
 
+func (p *pixbufScaler) setParentPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
+	setter := p.parent.set()
+	setter.SetFromPixbuf(pixbuf)
+}
+
 // invalidate invalidates the scaled pixbuf and optionally refetches one if
 // needed. The user should use this method instead of calling on the parent
 // widget's Refetch method.
 func (p *pixbufScaler) invalidate(newPixbuf bool) {
 	if p.src == nil {
-		p.parent.setFromPixbuf(nil)
+		p.setParentPixbuf(nil)
 		return
 	}
 
@@ -93,7 +104,7 @@ func (p *pixbufScaler) invalidate(newPixbuf bool) {
 	if !p.maxed && (dstW > srcW || dstH > srcH) {
 		if newPixbuf {
 			p.maxed = true
-			p.parent.setFromPixbuf(p.src)
+			p.parent.set().SetFromPixbuf(p.src)
 		} else {
 			p.parent.refetch()
 		}
@@ -104,7 +115,7 @@ func (p *pixbufScaler) invalidate(newPixbuf bool) {
 		// We don't have these scales, so just use the source. User gets jagged
 		// image, but on a 3x HiDPI display, it doesn't matter, unless the user
 		// has both 3x and 1x displays.
-		p.parent.setFromPixbuf(p.src)
+		p.setParentPixbuf(p.src)
 		return
 	}
 
@@ -124,5 +135,5 @@ func (p *pixbufScaler) invalidate(newPixbuf bool) {
 		p.scales[scale-1] = pixbuf
 	}
 
-	p.parent.setFromPixbuf(pixbuf)
+	p.setParentPixbuf(pixbuf)
 }

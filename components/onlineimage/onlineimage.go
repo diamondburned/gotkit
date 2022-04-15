@@ -7,10 +7,33 @@ import (
 	"context"
 
 	"github.com/diamondburned/adaptive"
-	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
 )
+
+type AnimationController baseImage
+
+// Start starts the animation playback in the background. The animation isn't
+// stopped until it is either unmapped or Stop is called.
+func (c *AnimationController) Start() {
+	(*baseImage)(c).startAnimation()
+}
+
+// Stop stops the animation playback.
+func (c *AnimationController) Stop() {
+	(*baseImage)(c).stopAnimation()
+}
+
+// ConnectMotion connects a motion controller to the given widget that will
+// activate the animation when it's hovered over (entered).
+func (c *AnimationController) ConnectMotion(w gtk.Widgetter) {
+	motion := gtk.NewEventControllerMotion()
+	motion.ConnectEnter(func(x, y float64) { c.Start() })
+	motion.ConnectLeave(func() { c.Stop() })
+
+	base := gtk.BaseWidget(w)
+	base.AddController(motion)
+}
 
 var (
 	_ imageParent = (*Avatar)(nil)
@@ -44,8 +67,17 @@ func (a *Avatar) SetSizeRequest(size int) {
 	a.base.scaler.Invalidate()
 }
 
-func (a *Avatar) setFromPixbuf(p *gdkpixbuf.Pixbuf) {
-	a.SetFromPixbuf(p)
+// EnableAnimation enables animation for the avatar. The controller is returned
+// for the user to determine when to play the animation.
+func (a *Avatar) EnableAnimation() *AnimationController {
+	return a.base.enableAnimation()
+}
+
+func (a *Avatar) set() imgutil.ImageSetter {
+	return imgutil.ImageSetter{
+		SetFromPixbuf:    a.SetFromPixbuf,
+		SetFromPaintable: a.SetFromPaintable,
+	}
 }
 
 // Image is an online variant of gtk.Image.
@@ -74,8 +106,17 @@ func (i *Image) SetSizeRequest(w, h int) {
 	i.base.scaler.Invalidate()
 }
 
-func (i *Image) setFromPixbuf(p *gdkpixbuf.Pixbuf) {
-	i.SetFromPixbuf(p)
+// EnableAnimation enables animation for the avatar. The controller is returned
+// for the user to determine when to play the animation.
+func (i *Image) EnableAnimation() *AnimationController {
+	return i.base.enableAnimation()
+}
+
+func (i *Image) set() imgutil.ImageSetter {
+	return imgutil.ImageSetter{
+		SetFromPixbuf:    i.SetFromPixbuf,
+		SetFromPaintable: i.SetFromPaintable,
+	}
 }
 
 // Picture is an online variant of gtk.Picture.
@@ -104,6 +145,15 @@ func (p *Picture) SetSizeRequest(w, h int) {
 	p.base.scaler.Invalidate()
 }
 
-func (p *Picture) setFromPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
-	p.SetPixbuf(pixbuf)
+// EnableAnimation enables animation for the avatar. The controller is returned
+// for the user to determine when to play the animation.
+func (p *Picture) EnableAnimation() *AnimationController {
+	return p.base.enableAnimation()
+}
+
+func (p *Picture) set() imgutil.ImageSetter {
+	return imgutil.ImageSetter{
+		SetFromPixbuf:    p.SetPixbuf,
+		SetFromPaintable: p.SetPaintable,
+	}
 }

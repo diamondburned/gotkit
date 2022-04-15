@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/diamondburned/gotk4/pkg/core/gioutil"
@@ -26,7 +27,7 @@ const (
 
 type Opts struct {
 	w, h  int
-	setFn interface{}
+	setFn ImageSetter
 	err   func(error)
 
 	sizer struct {
@@ -107,14 +108,10 @@ func WithOpts(ctx context.Context, optFuncs ...OptFunc) context.Context {
 // WithFallbackIcon makes image functions use the icon as the image given into
 // the callback instead of a nil one. If name is empty, then dialog-error is
 // used. Note that this function overrides WithErrorFn if it is after.
-//
-// This function only works with AsyncRead and AsyncGET. Using this elsewhere
-// will result in a panic.
 func WithFallbackIcon(name string) OptFunc {
 	return func(o *Opts) {
 		o.err = func(error) {
-			fn, ok := o.setFn.(func(gdk.Paintabler))
-			if !ok {
+			if o.setFn.SetFromPaintable == nil {
 				return
 			}
 
@@ -127,7 +124,7 @@ func WithFallbackIcon(name string) OptFunc {
 			}
 
 			icon := IconPaintable(name, w, h)
-			fn(icon)
+			o.setFn.SetFromPaintable(icon)
 		}
 	}
 }
@@ -180,133 +177,33 @@ func WithSizeOverrider(widget gtk.Widgetter, w, h int) OptFunc {
 	}
 }
 
-// AsyncRead reads the given reader asynchronously into a paintable.
-func AsyncRead(ctx context.Context, r io.ReadCloser, f func(gdk.Paintabler)) {
-	ctx, cancel := context.WithCancel(ctx)
-
-	go func() {
-		<-ctx.Done()
-		r.Close()
-	}()
-
-	o := OptsFromContext(ctx)
-	o.setFn = f
-
-	do(ctx, o, true, func() (func(), error) {
-		defer cancel()
-
-		var paintable gdk.Paintabler
-
-		p, err := readPixbuf(r, o)
-		if err == nil {
-			paintable = gdk.NewTextureForPixbuf(p)
-		}
-
-		return func() { f(paintable) }, nil
-	})
-}
-
-// Read synchronously reads the reader into a paintable. The given context does
-// NOT interrupt the read once cancelled.
-func Read(ctx context.Context, r io.Reader) (gdk.Paintabler, error) {
-	var paintable gdk.Paintabler
-	var err error
-
-	o := OptsFromContext(ctx)
-	o.setFn = func(p gdk.Paintabler) { paintable = p }
-
-	p, err := readPixbuf(r, o)
-	if err == nil {
-		paintable = gdk.NewTextureForPixbuf(p)
-	}
-
-	return paintable, err
-}
-
 // AsyncGET GETs the given URL and calls f in the main loop. If the context is
 // cancelled by the time GET is done, then f will not be called. If the given
 // URL is nil, then the function does nothing.
 //
 // This function can be called from any thread. It will synchronize accordingly
 // by itself.
-func AsyncGET(ctx context.Context, url string, f func(gdk.Paintabler)) {
-	if url == "" {
-		return
-	}
-
-	o := OptsFromContext(ctx)
-	o.setFn = f
-
-	do(ctx, o, true, func() (func(), error) {
-		p, err := get(ctx, url, o)
-		if err != nil {
-			return nil, err
-		}
-
-		return func() { f(p) }, nil
-	})
+func AsyncGET(ctx context.Context, url string, img ImageSetter) {
+	get(ctx, url, img, true)
 }
 
 // GET gets the given URL into a Paintable.
-func GET(ctx context.Context, url string, f func(gdk.Paintabler)) {
+func GET(ctx context.Context, url string, img ImageSetter) {
+	get(ctx, url, img, false)
+}
+
+func get(ctx context.Context, url string, img ImageSetter, async bool) {
 	if url == "" {
 		return
 	}
 
 	o := OptsFromContext(ctx)
-	o.setFn = f
+	o.setFn = img
 
-	do(ctx, o, false, func() (func(), error) {
-		p, err := get(ctx, url, o)
-		if err != nil {
-			return nil, err
-		}
-
-		return func() { f(p) }, nil
-	})
+	do(ctx, o, async, func() error { return fetchImage(ctx, url, img, o) })
 }
 
-func get(ctx context.Context, url string, o Opts) (gdk.Paintabler, error) {
-	pixbuf, err := getPixbuf(ctx, url, o)
-	if err != nil {
-		return nil, err
-	}
-
-	return gdk.NewTextureForPixbuf(pixbuf), nil
-}
-
-// AsyncGETPixbuf fetches a pixbuf.
-func AsyncGETPixbuf(ctx context.Context, url string, f func(*gdkpixbuf.Pixbuf)) {
-	if url == "" {
-		return
-	}
-
-	o := OptsFromContext(ctx)
-
-	do(ctx, o, true, func() (func(), error) {
-		p, err := getPixbuf(ctx, url, o)
-		if err != nil {
-			return nil, err
-		}
-
-		return func() { f(p) }, nil
-	})
-}
-
-// GETPixbuf gets the Pixbuf directly.
-func GETPixbuf(ctx context.Context, url string) (*gdkpixbuf.Pixbuf, error) {
-	return getPixbuf(ctx, url, OptsFromContext(ctx))
-}
-
-func getPixbuf(ctx context.Context, url string, o Opts) (*gdkpixbuf.Pixbuf, error) {
-	if url == "" {
-		return nil, errors.New("empty URL given")
-	}
-
-	return fetchPixbuf(ctx, url, o)
-}
-
-func do(ctx context.Context, o Opts, async bool, do func() (func(), error)) {
+func do(ctx context.Context, o Opts, async bool, do func() error) {
 	if async {
 		go doImpl(ctx, o, do)
 	} else {
@@ -314,35 +211,41 @@ func do(ctx context.Context, o Opts, async bool, do func() (func(), error)) {
 	}
 }
 
-func doImpl(ctx context.Context, o Opts, do func() (func(), error)) {
-	f, err := do()
-	if err != nil {
+func doImpl(ctx context.Context, o Opts, do func() error) {
+	if err := do(); err != nil && ctx.Err() == nil {
 		o.error(err, true)
-		return
+	}
+
+	if ctx.Err() != nil {
+		glib.IdleAdd(func() { o.error(ctx.Err(), false) })
+	}
+}
+
+func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opts) error {
+	if o.w > 0 && o.h > 0 {
+		// Slow path, since we need to use PixbufLoader to be able to rescale
+		// this.
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		return loadPixbuf(ctx, f, img, o)
+	}
+
+	anim, err := gdkpixbuf.NewPixbufAnimationFromFile(path)
+	if err != nil {
+		return err
 	}
 
 	glib.IdleAdd(func() {
 		select {
 		case <-ctx.Done():
-			// don't call f if cancelledd
-			o.error(ctx.Err(), false)
+			return
 		default:
-			f()
 		}
-	})
-}
 
-var errNilPixbuf = errors.New("nil pixbuf")
-
-func readPixbuf(r io.Reader, o Opts) (*gdkpixbuf.Pixbuf, error) {
-	loader := gdkpixbuf.NewPixbufLoader()
-	loader.ConnectSizePrepared(func(w, h int) {
-		if o.w > 0 && o.h > 0 {
-			if w != o.w || h != o.h {
-				w, h = MaxSize(w, h, o.w, o.h)
-				loader.SetSize(w, h)
-			}
-		}
 		if o.sizer.set != nil {
 			maxW, maxH := o.sizer.w, o.sizer.h
 			if maxW == 0 && maxH == 0 {
@@ -351,51 +254,95 @@ func readPixbuf(r io.Reader, o Opts) (*gdkpixbuf.Pixbuf, error) {
 			if maxW == 0 && maxH == 0 {
 				maxW, maxH = o.w, o.h
 			}
+
+			w := anim.Width()
+			h := anim.Height()
 			o.sizer.set.SetSizeRequest(MaxSize(w, h, maxW, maxH))
+		}
+
+		if img.SetFromAnimation != nil && !anim.IsStaticImage() {
+			// Is actually a real animation. Call SetFromAnimation instead
+			// of SetFromPixbuf to signify this.
+			img.SetFromAnimation(anim)
+			return
+		}
+
+		if img.SetFromPixbuf != nil {
+			img.SetFromPixbuf(anim.StaticImage())
+			return
+		}
+
+		if img.SetFromPaintable != nil {
+			img.SetFromPaintable(gdk.NewTextureForPixbuf(anim.StaticImage()))
+			return
+		}
+	})
+
+	return nil
+}
+
+var errNilPixbuf = errors.New("nil pixbuf")
+
+func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error {
+	var sizeReq [2]int
+
+	loader := gdkpixbuf.NewPixbufLoader()
+	loader.ConnectSizePrepared(func(w, h int) {
+		if o.w > 0 && o.h > 0 {
+			if w != o.w || h != o.h {
+				w, h = MaxSize(w, h, o.w, o.h)
+				loader.SetSize(w, h)
+			}
+		}
+
+		if o.sizer.set != nil {
+			maxW, maxH := o.sizer.w, o.sizer.h
+			if maxW == 0 && maxH == 0 {
+				maxW, maxH = o.sizer.set.SizeRequest()
+			}
+			if maxW == 0 && maxH == 0 {
+				maxW, maxH = o.w, o.h
+			}
+			sizeReq[0], sizeReq[1] = MaxSize(w, h, maxW, maxH)
 		}
 	})
 
 	if err := pixbufLoaderReadFrom(loader, r); err != nil {
-		return nil, errors.Wrap(err, "reader error")
+		return errors.Wrap(err, "reader error")
 	}
 
-	pixbuf := loader.Pixbuf()
-	if pixbuf == nil {
-		return nil, errNilPixbuf
-	}
-
-	return pixbuf, nil
-}
-
-func loadPixbufFromFile(path string, o Opts) (*gdkpixbuf.Pixbuf, error) {
-	var pixbuf *gdkpixbuf.Pixbuf
-	var err error
-
-	if o.w > 0 && o.h > 0 {
-		pixbuf, err = gdkpixbuf.NewPixbufFromFileAtScale(path, o.w, o.h, true)
-	} else {
-		pixbuf, err = gdkpixbuf.NewPixbufFromFile(path)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	if o.sizer.set != nil {
-		maxW, maxH := o.sizer.w, o.sizer.h
-		if maxW == 0 && maxH == 0 {
-			maxW, maxH = o.sizer.set.SizeRequest()
-		}
-		if maxW == 0 && maxH == 0 {
-			maxW, maxH = o.w, o.h
+	glib.IdleAdd(func() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
 
-		w := pixbuf.Width()
-		h := pixbuf.Height()
-		o.sizer.set.SetSizeRequest(MaxSize(w, h, maxW, maxH))
-	}
+		if sizeReq != [2]int{} {
+			o.sizer.set.SetSizeRequest(sizeReq[0], sizeReq[1])
+		}
 
-	return pixbuf, nil
+		anim := loader.Animation()
+
+		if img.SetFromAnimation != nil && !anim.IsStaticImage() {
+			// Is actually a real animation. Call SetFromAnimation instead
+			// of SetFromPixbuf to signify this.
+			img.SetFromAnimation(anim)
+			return
+		}
+
+		if img.SetFromPixbuf != nil {
+			img.SetFromPixbuf(anim.StaticImage())
+			return
+		}
+
+		if img.SetFromPaintable != nil {
+			img.SetFromPaintable(gdk.NewTextureForPixbuf(anim.StaticImage()))
+			return
+		}
+	})
+
+	return nil
 }
 
 const defaultBufsz = 1 << 17 // 128KB

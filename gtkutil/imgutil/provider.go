@@ -6,27 +6,50 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/diamondburned/gotk4/pkg/core/glib"
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
-	"github.com/pkg/errors"
+	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
 // Provider describes a universal resource provider.
 type Provider interface {
 	Schemes() []string
-	Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pixbuf))
+	Do(ctx context.Context, url *url.URL, img ImageSetter)
+}
+
+// ImageSetter contains functions for setting images fetched from a Provider.
+type ImageSetter struct {
+	SetFromPixbuf    func(*gdkpixbuf.Pixbuf)
+	SetFromAnimation func(*gdkpixbuf.PixbufAnimation)
+	SetFromPaintable func(gdk.Paintabler)
+}
+
+// ImageSetterFromImage returns an ImageSetter for a gtk.Image.
+func ImageSetterFromImage(img *gtk.Image) ImageSetter {
+	return ImageSetter{
+		SetFromPaintable: img.SetFromPaintable,
+		SetFromPixbuf:    img.SetFromPixbuf,
+	}
+}
+
+// ImageSetterFromPicture returns an ImageSetter for a gtk.Picture.
+func ImageSetterFromPicture(picture *gtk.Picture) ImageSetter {
+	return ImageSetter{
+		SetFromPaintable: picture.SetPaintable,
+		SetFromPixbuf:    picture.SetPixbuf,
+	}
 }
 
 // DoProviderURL invokes a Provider with the given URI string (instead of a
 // *url.URL instance).
-func DoProviderURL(ctx context.Context, p Provider, uri string, f func(*gdkpixbuf.Pixbuf)) {
+func DoProviderURL(ctx context.Context, p Provider, uri string, img ImageSetter) {
 	url, err := url.Parse(uri)
 	if err != nil {
 		OptsError(ctx, err)
 		return
 	}
 
-	p.Do(ctx, url, f)
+	p.Do(ctx, url, img)
 }
 
 const sizeFragmentf = "%dx%d"
@@ -79,14 +102,14 @@ func (p Providers) Schemes() []string {
 }
 
 // Do invokes any of the providers inside.
-func (p Providers) Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pixbuf)) {
+func (p Providers) Do(ctx context.Context, url *url.URL, img ImageSetter) {
 	provider, ok := p[url.Scheme]
 	if !ok {
 		OptsError(ctx, fmt.Errorf("unknown scheme %q", url.Scheme))
 		return
 	}
 
-	provider.Do(ctx, url, f)
+	provider.Do(ctx, url, img)
 }
 
 type httpProvider struct{}
@@ -101,8 +124,8 @@ func (p httpProvider) Schemes() []string {
 }
 
 // Do implements Provider.
-func (p httpProvider) Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pixbuf)) {
-	AsyncGETPixbuf(ctx, url.String(), f)
+func (p httpProvider) Do(ctx context.Context, url *url.URL, img ImageSetter) {
+	AsyncGET(ctx, url.String(), img)
 }
 
 type fileProvider struct{}
@@ -116,43 +139,11 @@ func (p fileProvider) Schemes() []string {
 }
 
 // Do implements Provider.
-func (p fileProvider) Do(ctx context.Context, url *url.URL, f func(*gdkpixbuf.Pixbuf)) {
+func (p fileProvider) Do(ctx context.Context, url *url.URL, img ImageSetter) {
 	go func() {
 		o := OptsFromContext(ctx)
-
-		var p *gdkpixbuf.Pixbuf
-		var err error
-
-		// Fast path with no size.
-		if w, h := o.Size(); w == 0 && h == 0 {
-			p, err = gdkpixbuf.NewPixbufFromFile(url.Path)
-		} else {
-			p, err = gdkpixbuf.NewPixbufFromFileAtScale(url.Path, w, h, true)
+		if err := loadPixbufFromFile(ctx, url.Path, img, o); err != nil {
+			o.Error(err)
 		}
-
-		if err != nil {
-			o.Error(errors.Wrap(err, "cannot create pixbuf"))
-			return
-		}
-
-		glib.IdleAdd(func() {
-			select {
-			case <-ctx.Done():
-				o.Error(ctx.Err())
-			default:
-				f(p)
-			}
-		})
 	}()
-}
-
-// PixbufFromFile creates a pixbuf from the given file path. It scales using the
-// given options.
-func PixbufFromFile(o *Opts, path string) (*gdkpixbuf.Pixbuf, error) {
-	// Fast path with no size.
-	if w, h := o.Size(); w == 0 && h == 0 {
-		return gdkpixbuf.NewPixbufFromFile(path)
-	} else {
-		return gdkpixbuf.NewPixbufFromFileAtScale(path, w, h, true)
-	}
 }

@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotkit/app"
 	"github.com/diamondburned/gotkit/gtkutil/httputil"
 	"github.com/diamondburned/gotkit/internal/cachegc"
@@ -67,23 +66,27 @@ func markURLInvalid(url string) {
 	invalidURLs.Store(httputil.HashURL(url), time.Now().Unix())
 }
 
-func fetchPixbuf(ctx context.Context, url string, o Opts) (*gdkpixbuf.Pixbuf, error) {
+func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) error {
+	if url == "" {
+		return errors.New("empty URL given")
+	}
+
 	if urlIsInvalid(url) {
-		return nil, errURLNotFound
+		return errURLNotFound
 	}
 
 	cacheDir := app.FromContext(ctx).CachePath("img2")
 	cacheDst := urlPath(cacheDir, url)
 
-	p, err := loadPixbufFromFile(cacheDst, o)
+	err := loadPixbufFromFile(ctx, cacheDst, img, o)
 	cachegc.Do(cacheDir, CacheAge)
 
 	if err == nil {
-		return p, err
+		return nil
 	}
 
-	if err = fetch(ctx, url, cacheDst); err == nil {
-		return loadPixbufFromFile(cacheDst, o)
+	if err := fetchURL(ctx, url, cacheDst); err == nil {
+		return loadPixbufFromFile(ctx, cacheDst, img, o)
 	}
 
 	// See if this is a cache error. If it is, then just don't use the cache
@@ -93,18 +96,18 @@ func fetchPixbuf(ctx context.Context, url string, o Opts) (*gdkpixbuf.Pixbuf, er
 
 		r, err := getBody(ctx, url)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer r.Close()
 
-		return readPixbuf(r, o)
+		return loadPixbuf(ctx, r, img, o)
 	}
 
 	// Otherwise, return.
-	return nil, err
+	return err
 }
 
-func fetch(ctx context.Context, url, cacheDst string) error {
+func fetchURL(ctx context.Context, url, cacheDst string) error {
 	// How this works: we acquire a mutex for each request so that only 1
 	// request per URL is ever sent. We will then perform the request so that
 	// the cache is populated, and then repeat. This way, only 1 parallel
