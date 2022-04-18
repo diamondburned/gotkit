@@ -179,9 +179,8 @@ func (app *Application) Error(err ...error) {
 // Fatal shows a fatal error popup and closes the application afterwards.
 func (app *Application) Fatal(err ...error) {
 	for _, win := range app.Windows() {
-		win := win
 		win.SetSensitive(false)
-		errpopup.Show(&win, filterAndLogErrors("fatal:", err), app.Quit)
+		errpopup.Show(win, filterAndLogErrors("fatal:", err), app.Quit)
 	}
 }
 

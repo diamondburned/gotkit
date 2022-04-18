@@ -28,7 +28,7 @@ const (
 type Opts struct {
 	w, h  int
 	setFn ImageSetter
-	err   func(error)
+	done  func(error)
 
 	sizer struct {
 		set interface {
@@ -59,11 +59,9 @@ func (o *Opts) processOpts(funcs []OptFunc) {
 	}
 }
 
-func (o *Opts) error(err error, writeLog bool) {
-	if o.err != nil {
-		gtkutil.InvokeMain(func() { o.err(err) })
-	} else if writeLog {
-		log.Println("imgutil:", err)
+func (o *Opts) needDone() {
+	if o.done != nil {
+		panic("o.done is already set")
 	}
 }
 
@@ -72,18 +70,35 @@ var ignoreErrors = []error{
 	context.Canceled,
 }
 
+func (o *Opts) onDone(err error) {
+	if o.done != nil {
+		done := o.done
+		o.done = nil
+
+		glib.IdleAdd(func() { done(err) })
+		return
+	}
+
+	if err == nil {
+		return
+	}
+
+	for _, ignore := range ignoreErrors {
+		if errors.Is(err, ignore) {
+			return
+		}
+	}
+
+	log.Println("imgutil:", err)
+}
+
 // Error triggers the error handler inside OptFunc if there's one. Otherwise, an
 // error is logged down. This is useful for asynchronous imgutil function
 // wrappers to signal an error.
 func (o *Opts) Error(err error) {
-	log := true
-	for _, ignore := range ignoreErrors {
-		if errors.Is(err, ignore) {
-			log = false
-			break
-		}
+	if err != nil {
+		o.onDone(err)
 	}
-	o.error(err, log)
 }
 
 // Size returns the requested size from the Opts or (0, 0) if there is none.
@@ -110,8 +125,9 @@ func WithOpts(ctx context.Context, optFuncs ...OptFunc) context.Context {
 // used. Note that this function overrides WithErrorFn if it is after.
 func WithFallbackIcon(name string) OptFunc {
 	return func(o *Opts) {
-		o.err = func(error) {
-			if o.setFn.SetFromPaintable == nil {
+		o.needDone()
+		o.done = func(err error) {
+			if err == nil || o.setFn.SetFromPaintable == nil {
 				return
 			}
 
@@ -151,7 +167,23 @@ func IconPaintable(name string, w, h int) gdk.Paintabler {
 
 // WithErrorFn adds a callback that is called on an error.
 func WithErrorFn(f func(error)) OptFunc {
-	return func(o *Opts) { o.err = f }
+	return func(o *Opts) {
+		o.needDone()
+		o.done = func(err error) {
+			if err != nil {
+				f(err)
+			}
+		}
+	}
+}
+
+// WithDoneFn is like WithErrorFn, except it's called once the routine is done
+// on the main thread with a possibly nil error.
+func WithDoneFn(done func(error)) OptFunc {
+	return func(o *Opts) {
+		o.needDone()
+		o.done = done
+	}
 }
 
 // WithRectRescale is a convenient function around WithRescale for rectangular
@@ -193,31 +225,27 @@ func GET(ctx context.Context, url string, img ImageSetter) {
 }
 
 func get(ctx context.Context, url string, img ImageSetter, async bool) {
-	if url == "" {
-		return
-	}
-
 	o := OptsFromContext(ctx)
 	o.setFn = img
 
-	do(ctx, o, async, func() error { return fetchImage(ctx, url, img, o) })
-}
+	if url == "" {
+		o.onDone(nil)
+		return
+	}
 
-func do(ctx context.Context, o Opts, async bool, do func() error) {
+	fetch := func() {
+		err := fetchImage(ctx, url, img, o)
+		if err == nil {
+			err = ctx.Err()
+		}
+
+		o.onDone(err)
+	}
+
 	if async {
-		go doImpl(ctx, o, do)
+		go fetch()
 	} else {
-		doImpl(ctx, o, do)
-	}
-}
-
-func doImpl(ctx context.Context, o Opts, do func() error) {
-	if err := do(); err != nil && ctx.Err() == nil {
-		o.error(err, true)
-	}
-
-	if ctx.Err() != nil {
-		glib.IdleAdd(func() { o.error(ctx.Err(), false) })
+		fetch()
 	}
 }
 
@@ -284,7 +312,7 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 var errNilPixbuf = errors.New("nil pixbuf")
 
 func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error {
-	var sizeReq [2]int
+	var size [2]int
 
 	loader := gdkpixbuf.NewPixbufLoader()
 	loader.ConnectSizePrepared(func(w, h int) {
@@ -296,14 +324,7 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 		}
 
 		if o.sizer.set != nil {
-			maxW, maxH := o.sizer.w, o.sizer.h
-			if maxW == 0 && maxH == 0 {
-				maxW, maxH = o.sizer.set.SizeRequest()
-			}
-			if maxW == 0 && maxH == 0 {
-				maxW, maxH = o.w, o.h
-			}
-			sizeReq[0], sizeReq[1] = MaxSize(w, h, maxW, maxH)
+			size = [2]int{w, h}
 		}
 	})
 
@@ -318,8 +339,16 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 		default:
 		}
 
-		if sizeReq != [2]int{} {
-			o.sizer.set.SetSizeRequest(sizeReq[0], sizeReq[1])
+		if size != [2]int{} {
+			maxW, maxH := o.sizer.w, o.sizer.h
+			if maxW == 0 && maxH == 0 {
+				maxW, maxH = o.sizer.set.SizeRequest()
+			}
+			if maxW == 0 && maxH == 0 {
+				maxW, maxH = o.w, o.h
+			}
+			w, h := MaxSize(size[0], size[1], maxW, maxH)
+			o.sizer.set.SetSizeRequest(w, h)
 		}
 
 		anim := loader.Animation()

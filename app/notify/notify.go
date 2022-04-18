@@ -58,10 +58,9 @@ func IconURL(ctx context.Context, url string, fallback iconName) Icon {
 
 	loadingIcon := make(chan *gio.BytesIcon, 1)
 	go func() {
-		defer close(loadingIcon)
-
 		ctx := imgutil.WithOpts(ctx,
 			imgutil.WithRescale(MaxIconSize, MaxIconSize),
+			imgutil.WithDoneFn(func(error) { close(loadingIcon) }),
 		)
 
 		imgutil.GET(ctx, url, imgutil.ImageSetter{
@@ -232,7 +231,7 @@ func (n *Notification) Send(app *app.Application) {
 	n.playSound(app)
 
 	if n.async() {
-		go app.SendNotification(string(n.ID), n.asGio())
+		go func() { app.SendNotification(string(n.ID), n.asGio()) }()
 	} else {
 		app.SendNotification(string(n.ID), n.asGio())
 	}

@@ -9,6 +9,8 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
+
+	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 )
 
 // MaxFPS is the maximum FPS to play an animation (often a GIF) at. In reality,
@@ -30,16 +32,18 @@ type baseImage struct {
 	imageParent
 	prov imgutil.Provider
 
-	scaler pixbufScaler
-
-	animation *gdkpixbuf.PixbufAnimation
-	animating glib.SourceHandle
+	scaler    pixbufScaler
+	animation *animation
 
 	ctx gtkutil.Cancellable
 	url string
 	ok  bool
+}
 
-	animate bool
+type animation struct {
+	pixbuf    *gdkpixbuf.PixbufAnimation
+	animating glib.SourceHandle
+	paused    bool
 }
 
 // NewAvatar creates a new avatar.
@@ -99,38 +103,90 @@ func (b *baseImage) fetch(ctx context.Context) {
 	imgutil.DoProviderURL(ctx, b.prov, url, imgutil.ImageSetter{
 		SetFromPixbuf: func(p *gdkpixbuf.Pixbuf) {
 			b.ok = true
-			b.animation = nil
 			b.scaler.SetFromPixbuf(p)
+
+			if b.animation != nil {
+				b.animation.pixbuf = nil
+			}
 		},
 		SetFromAnimation: func(anim *gdkpixbuf.PixbufAnimation) {
 			b.ok = true
 			b.scaler.SetFromPixbuf(anim.StaticImage())
 
-			if b.animate {
-				b.animation = anim
-			} else {
-				b.animation = nil
+			if b.animation != nil {
+				b.animation.pixbuf = anim
 			}
 		},
 	})
 }
 
 func (b *baseImage) enableAnimation() *AnimationController {
-	if CanAnimate {
-		b.animate = true
-		base := gtk.BaseWidget(b.imageParent)
-		base.ConnectUnmap(b.stopAnimation)
+	if !CanAnimate {
+		return (*AnimationController)(b)
 	}
+
+	b.animation = &animation{}
+
+	setPause := func(pause bool) {
+		if pause {
+			b.stopAnimation()
+		}
+
+		b.animation.paused = pause
+	}
+
+	base := gtk.BaseWidget(b.imageParent)
+	base.ConnectMap(func() { setPause(false) })
+	base.ConnectUnmap(func() { setPause(true) })
+
+	var bindRoot func()
+	var unbindRoot func()
+
+	bindRoot = func() {
+		if unbindRoot != nil {
+			unbindRoot()
+			unbindRoot = nil
+		}
+
+		w, ok := rootWindow(gtk.BaseWidget(b.imageParent).Root())
+		if ok {
+			s := w.NotifyProperty("is-active", func() {
+				// Pause animation on window unfocus.
+				setPause(!w.IsActive())
+			})
+			unbindRoot = func() { w.HandlerDisconnect(s) }
+		}
+	}
+
+	b.NotifyProperty("root", bindRoot)
+	bindRoot()
 
 	return (*AnimationController)(b)
 }
 
+func rootWindow(w *gtk.Root) (*gtk.Window, bool) {
+	if w == nil {
+		return nil, false
+	}
+
+	obj := coreglib.InternObject(w)
+	win := obj.WalkCast(func(obj glib.Objector) bool {
+		_, isWindow := obj.(*gtk.Window)
+		return isWindow
+	})
+	if win == nil {
+		return nil, false
+	}
+
+	return win.(*gtk.Window), true
+}
+
 func (b *baseImage) startAnimation() {
-	if !b.animate || b.animating > 0 || b.animation == nil {
+	if b.animation == nil || b.animation.pixbuf == nil || b.animation.paused {
 		return
 	}
 
-	iter := b.animation.Iter(nil)
+	iter := b.animation.pixbuf.Iter(nil)
 	setter := b.imageParent.set()
 
 	base := gtk.BaseWidget(b.imageParent)
@@ -162,10 +218,10 @@ func (b *baseImage) startAnimation() {
 
 		if delay := animDelay(iter); delay != -1 {
 			// Schedule next frame.
-			b.animating = glib.TimeoutAddPriority(uint(delay), glib.PriorityLow, advance)
+			b.animation.animating = glib.TimeoutAddPriority(uint(delay), glib.PriorityLow, advance)
 		} else {
 			// End of animation.
-			b.finishStopAnimation()
+			b.stopAnimation()
 		}
 	}
 	// Kickstart the animation.
@@ -173,11 +229,16 @@ func (b *baseImage) startAnimation() {
 }
 
 func (b *baseImage) stopAnimation() {
-	if b.animating != 0 {
-		glib.SourceRemove(b.animating)
-		b.animating = 0
-		b.finishStopAnimation()
+	if b.animation == nil {
+		return
 	}
+
+	if b.animation.animating != 0 {
+		glib.SourceRemove(b.animation.animating)
+		b.animation.animating = 0
+	}
+
+	b.finishStopAnimation()
 }
 
 func (b *baseImage) finishStopAnimation() {

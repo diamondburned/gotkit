@@ -368,7 +368,7 @@ func initScale() {
 
 func bindDisplayManager(dmanager *gdk.DisplayManager) {
 	for _, display := range dmanager.ListDisplays() {
-		bindDisplay(&display)
+		bindDisplay(display)
 	}
 }
 
@@ -383,9 +383,9 @@ func bindDisplay(display *gdk.Display) {
 	boundDisplays[dname] = struct{}{}
 	display.ConnectClosed(func(bool) { delete(boundDisplays, dname) })
 
-	monitors := display.Monitors()
-	monitors.ConnectItemsChanged(func(_, _, _ uint) { updateScale(monitors) })
-	updateScale(monitors)
+	list := display.Monitors()
+	list.ConnectItemsChanged(func(_, _, _ uint) { updateScale(list) })
+	updateScale(list)
 }
 
 func updateScale(monitors gio.ListModeller) {
