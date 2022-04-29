@@ -142,7 +142,7 @@ func (p fileProvider) Schemes() []string {
 func (p fileProvider) Do(ctx context.Context, url *url.URL, img ImageSetter) {
 	go func() {
 		o := OptsFromContext(ctx)
-		if err := loadPixbufFromFile(ctx, url.Path, img, o); err != nil {
+		if err := loadPixbufFromFile(ctx, url.Host+url.Path, img, o); err != nil {
 			o.Error(err)
 		}
 	}()
