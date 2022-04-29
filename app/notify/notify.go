@@ -44,14 +44,14 @@ func (n iconName) icon() gio.Iconner {
 const MaxIconSize = 64
 
 type iconURL struct {
-	fallbackIcon iconName
+	fallbackIcon Icon
 	loadingIcon  <-chan *gio.BytesIcon
 	finishedIcon *gio.BytesIcon
 }
 
 // IconURL creates a notification icon that is an image fetched online. The
 // image is fetched using imgutil.GETPixbuf.
-func IconURL(ctx context.Context, url string, fallback iconName) Icon {
+func IconURL(ctx context.Context, url string, fallback Icon) Icon {
 	if url == "" {
 		return fallback
 	}
