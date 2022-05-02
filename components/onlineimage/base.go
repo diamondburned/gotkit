@@ -200,32 +200,39 @@ func (b *baseImage) startAnimation() {
 	w *= scale
 	h *= scale
 
-	var advance func()
-	advance = func() {
-		if iter.Advance(nil) {
-			// Got new frame.
-			p := iter.Pixbuf()
-			// We only scale the pixbuf if our scale factor is 2x or 1x, because
-			// 3x users likely won't notice a significance difference in
-			// quality.
-			if w > 0 && h > 0 && scale < 3 {
-				// Scaling doesn't actually use that much more CPU
-				// than not, but it depends on how big the image is.
-				p = p.ScaleSimple(w, h, gdkpixbuf.InterpTiles)
-			}
-			setter.SetFromPixbuf(p)
+	useIter := func(iter *gdkpixbuf.PixbufAnimationIter) {
+		// Got new frame.
+		p := iter.Pixbuf()
+		// We only scale the pixbuf if our scale factor is 2x or 1x, because
+		// 3x users likely won't notice a significance difference in
+		// quality.
+		if w > 0 && h > 0 && scale < 3 {
+			// Scaling doesn't actually use that much more CPU
+			// than not, but it depends on how big the image is.
+			p = p.ScaleSimple(w, h, gdkpixbuf.InterpTiles)
 		}
+		setter.SetFromPixbuf(p)
+	}
+	// Kickstart the animation.
+	useIter(iter)
 
+	var scheduleNext func()
+	scheduleNext = func() {
 		if delay := animDelay(iter); delay != -1 {
 			// Schedule next frame.
-			b.animation.animating = glib.TimeoutAddPriority(uint(delay), glib.PriorityLow, advance)
+			b.animation.animating = glib.TimeoutAddPriority(uint(delay), glib.PriorityLow, func() {
+				if iter.Advance(nil) {
+					useIter(iter)
+				}
+				scheduleNext()
+			})
 		} else {
 			// End of animation.
 			b.stopAnimation()
 		}
 	}
-	// Kickstart the animation.
-	advance()
+	// Schedule the next frame.
+	scheduleNext()
 }
 
 func (b *baseImage) stopAnimation() {
@@ -242,7 +249,12 @@ func (b *baseImage) stopAnimation() {
 }
 
 func (b *baseImage) finishStopAnimation() {
-	b.scaler.Invalidate()
+	if b.animation.pixbuf != nil {
+		iter := b.animation.pixbuf.Iter(nil)
+		b.scaler.SetFromPixbuf(iter.Pixbuf())
+	} else {
+		b.scaler.Invalidate()
+	}
 }
 
 func animDelay(iter *gdkpixbuf.PixbufAnimationIter) int {
