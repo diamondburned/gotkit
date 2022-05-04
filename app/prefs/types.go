@@ -182,6 +182,7 @@ func (i *Int) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
 		spin.AddCSSClass("prefui-prop")
 		spin.AddCSSClass("prefui-prop-int")
 		bindPropWidget(i, spin, "value-changed", propFuncs{
+			save:    save,
 			set:     func() { spin.SetValue(float64(i.Value())) },
 			publish: func() { i.Publish(spin.ValueAsInt()) },
 		})
