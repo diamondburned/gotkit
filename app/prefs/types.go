@@ -289,6 +289,7 @@ func (s *String) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
 		setEntryIcon(entry, "object-select", "")
 	})
 	bindPropWidget(s, entry, "activate,icon-press", propFuncs{
+		save: save,
 		set: func() {
 			entry.SetText(s.Value())
 		},
