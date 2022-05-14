@@ -181,6 +181,12 @@ func rootWindow(w *gtk.Root) (*gtk.Window, bool) {
 	return win.(*gtk.Window), true
 }
 
+// Constants for the maximum dimensions before we just don't scale our GIFs.
+const (
+	animMaxW = 2000
+	animMaxH = 2000
+)
+
 func (b *baseImage) startAnimation() {
 	if b.animation == nil || b.animation.pixbuf == nil || b.animation.paused {
 		return
@@ -197,20 +203,27 @@ func (b *baseImage) startAnimation() {
 	}
 
 	w, h := b.size()
+	if w == 0 || h == 0 {
+		return
+	}
+
 	w *= scale
 	h *= scale
 
 	useIter := func(iter *gdkpixbuf.PixbufAnimationIter) {
 		// Got new frame.
 		p := iter.Pixbuf()
-		// We only scale the pixbuf if our scale factor is 2x or 1x, because
-		// 3x users likely won't notice a significance difference in
-		// quality.
-		if w > 0 && h > 0 && scale < 3 {
-			// Scaling doesn't actually use that much more CPU
-			// than not, but it depends on how big the image is.
+
+		pw := p.Width()
+		ph := p.Height()
+
+		// See scaler.go's maxScale.
+		if (w < pw && pw < animMaxW) && (h < ph && ph < animMaxH) && scale <= maxScale {
+			// Scaling doesn't actually use that much more CPU than not, but it
+			// depends on how big the image is.
 			p = p.ScaleSimple(w, h, gdkpixbuf.InterpTiles)
 		}
+
 		setter.SetFromPixbuf(p)
 	}
 	// Kickstart the animation.

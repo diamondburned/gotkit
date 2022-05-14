@@ -24,23 +24,19 @@ type pixbufScaler struct {
 	scales pixbufScales
 	// src is the source pixbuf.
 	src *gdkpixbuf.Pixbuf
-	// maxed is true if the source pixbuf cannot go any higher.
-	maxed bool
 }
 
 // SetFromPixbuf invalidates and sets the internal scaler's pixbuf. The
 // SetFromPixbuf call might be bubbled up to the parent widget.
 func (p *pixbufScaler) SetFromPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
 	p.src = pixbuf
-	p.maxed = false
 	p.scales = pixbufScales{}
-
-	p.invalidate(true)
+	p.invalidate()
 }
 
 // Invalidate prompts the scaler to rescale.
 func (p *pixbufScaler) Invalidate() {
-	p.invalidate(false)
+	p.invalidate()
 }
 
 // ParentSize gets the cached parent widget's size request.
@@ -50,15 +46,15 @@ func (p *pixbufScaler) ParentSize() (w, h int) {
 
 func (p *pixbufScaler) init(parent *baseImage) {
 	if parent.set().SetFromPixbuf == nil {
-		log.Panicf("pixbufScaer: baseImage %T missing SetFromPixbuf", parent.imageParent)
+		log.Panicf("pixbufScaler: baseImage %T missing SetFromPixbuf", parent.imageParent)
 	}
 
-	w, h := parent.size()
-
 	p.parent = parent
-	p.parentSz = [2]int{w, h}
 
 	base := gtk.BaseWidget(parent)
+	base.ConnectMap(func() {
+		p.Invalidate()
+	})
 	base.NotifyProperty("scale-factor", func() {
 		gtkutil.SetScaleFactor(base.ScaleFactor())
 		p.Invalidate()
@@ -73,7 +69,7 @@ func (p *pixbufScaler) setParentPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
 // invalidate invalidates the scaled pixbuf and optionally refetches one if
 // needed. The user should use this method instead of calling on the parent
 // widget's Refetch method.
-func (p *pixbufScaler) invalidate(newPixbuf bool) {
+func (p *pixbufScaler) invalidate() {
 	if p.src == nil {
 		p.setParentPixbuf(nil)
 		return
@@ -94,6 +90,11 @@ func (p *pixbufScaler) invalidate(newPixbuf bool) {
 		p.parentSz = [2]int{dstW, dstH}
 	}
 
+	if dstW == 0 || dstH == 0 {
+		// No allocations yet.
+		return
+	}
+
 	// Scale the width and height up.
 	dstW *= scale
 	dstH *= scale
@@ -101,13 +102,8 @@ func (p *pixbufScaler) invalidate(newPixbuf bool) {
 	srcW := p.src.Width()
 	srcH := p.src.Height()
 
-	if !p.maxed && (dstW > srcW || dstH > srcH) {
-		if newPixbuf {
-			p.maxed = true
-			p.parent.set().SetFromPixbuf(p.src)
-		} else {
-			p.parent.refetch()
-		}
+	if dstW >= srcW || dstH >= srcH {
+		p.parent.set().SetFromPixbuf(p.src)
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"sync"
 
@@ -413,13 +414,16 @@ func MaxSize(w, h, maxW, maxH int) (int, int) {
 		return w, h
 	}
 
-	if w > h {
-		h = h * maxW / w
-		w = maxW
-	} else {
-		w = w * maxH / h
-		h = maxH
-	}
+	wf := float64(w)
+	hf := float64(h)
+
+	scale := math.Min(
+		float64(maxW)/wf,
+		float64(maxH)/hf,
+	)
+
+	w = int(math.Round(wf * scale))
+	h = int(math.Round(hf * scale))
 
 	return w, h
 }
