@@ -277,11 +277,18 @@ func (app *Application) AddJSONActions(m map[string]interface{}) {
 	for name, fn := range m {
 		name = strings.TrimPrefix(name, "app.")
 
-		v := gtkutil.NewJSONActionCallback(fn)
+		if callback, ok := fn.(func()); ok {
+			action := gtkutil.NewCallbackAction(name)
+			action.OnActivate(callback)
 
-		action := gio.NewSimpleAction(name, v.ArgType)
-		action.ConnectActivate(v.Func)
-		app.AddAction(action)
+			app.AddAction(action)
+		} else {
+			callback := gtkutil.NewJSONActionCallback(fn)
+
+			action := gio.NewSimpleAction(name, callback.ArgType)
+			action.ConnectActivate(callback.Func)
+			app.AddAction(action)
+		}
 	}
 }
 
