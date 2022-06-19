@@ -338,21 +338,33 @@ var darkStyles *gtk.StyleContext
 func IsDarkTheme() bool {
 	var darkBg bool // default light theme
 
+	bgcolor, ok := LookupColor(ThemeBackgroundColor)
+	if ok {
+		darkBg = ColorIsDark(
+			float64(bgcolor.Red()),
+			float64(bgcolor.Green()),
+			float64(bgcolor.Blue()),
+		)
+	}
+
+	return darkBg
+}
+
+// Constants for LookupColor.
+const (
+	ThemeBackgroundColor = "theme_bg_color"
+	ThemeForegroundColor = "theme_bg_color"
+)
+
+// LookupColor looks up the color from a global StyleContext.
+func LookupColor(color string) (rgba *gdk.RGBA, ok bool) {
 	gtkutil.InvokeMain(func() {
 		if darkStyles == nil {
 			w := gtk.NewLabel("")
 			darkStyles = w.StyleContext()
 		}
 
-		bgcolor, ok := darkStyles.LookupColor("theme_bg_color")
-		if ok {
-			darkBg = ColorIsDark(
-				float64(bgcolor.Red()),
-				float64(bgcolor.Green()),
-				float64(bgcolor.Blue()),
-			)
-		}
+		rgba, ok = darkStyles.LookupColor(color)
 	})
-
-	return darkBg
+	return
 }
