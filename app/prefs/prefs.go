@@ -6,9 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/doc"
 	"log"
+	"math"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/diamondburned/gotkit/app"
 	"github.com/diamondburned/gotkit/app/locale"
@@ -238,7 +241,9 @@ func ListProperties(ctx context.Context) []ListedSection {
 		if ref == nil {
 			return ""
 		}
-		return locale.S(ctx, ref)
+
+		str := locale.S(ctx, ref)
+		return docToText(str)
 	}
 
 	sections := make([]ListedSection, 0, len(m))
@@ -280,4 +285,48 @@ func ListProperties(ctx context.Context) []ListedSection {
 	})
 
 	return sections
+}
+
+func docToText(str string) string {
+	str = unindent(str)
+
+	var b strings.Builder
+	doc.ToText(&b, str, "", "\t", math.MaxInt)
+
+	str = b.String()
+	str = strings.Trim(str, "\n")
+
+	return str
+}
+
+func unindent(str string) string {
+	lines := strings.Split(str, "\n")
+
+	minIndent := -1
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		indent := countByteUntil(line, '\t')
+		if indent < minIndent || minIndent == -1 {
+			minIndent = indent
+		}
+	}
+
+	for i := range lines {
+		for j := 0; j < minIndent; j++ {
+			lines[i] = strings.TrimPrefix(lines[i], "\t")
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func countByteUntil(str string, char byte) int {
+	var i int
+	for i < len(str) && str[i] == char {
+		i++
+	}
+	return i
 }
