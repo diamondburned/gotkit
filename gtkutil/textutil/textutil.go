@@ -353,7 +353,7 @@ func IsDarkTheme() bool {
 // Constants for LookupColor.
 const (
 	ThemeBackgroundColor = "theme_bg_color"
-	ThemeForegroundColor = "theme_bg_color"
+	ThemeForegroundColor = "theme_fg_color"
 )
 
 // LookupColor looks up the color from a global StyleContext.
