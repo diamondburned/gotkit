@@ -109,18 +109,10 @@ func AddClass(w gtk.Widgetter, classes ...string) {
 func ApplyGlobalCSS() {
 	globalCSS := templateCSS("global", globalCSS.String())
 
-	prov := gtk.NewCSSProvider()
-	prov.ConnectParsingError(func(sec *gtk.CSSSection, err error) {
-		loc := sec.StartLocation()
-
-		lines := strings.Split(globalCSS, "\n")
-		log.Printf("CSS error (%v) at line: %q", err, lines[loc.Lines()])
-	})
-
-	prov.LoadFromData(globalCSS)
+	prov := newCSSProvider(globalCSS)
 
 	display := gdk.DisplayGetDefault()
-	gtk.StyleContextAddProviderForDisplay(display, prov, 600) // app
+	gtk.StyleContextAddProviderForDisplay(display, prov, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 }
 
 // ApplyUserCSS applies the user CSS at the given path.
@@ -134,10 +126,24 @@ func ApplyUserCSS(path string) {
 	if userCSS := string(f); userCSS != "" {
 		userCSS = templateCSS("user.css", userCSS)
 
-		prov := gtk.NewCSSProvider()
-		prov.LoadFromData(userCSS)
+		prov := newCSSProvider(userCSS)
 
 		display := gdk.DisplayGetDefault()
-		gtk.StyleContextAddProviderForDisplay(display, prov, 800) // user
+		// We use a higher priority than USER in order to override the user-
+		// specific global CSS. This is fine, because this file is made by the
+		// user anyway.
+		gtk.StyleContextAddProviderForDisplay(display, prov, gtk.STYLE_PROVIDER_PRIORITY_USER+200)
 	}
+}
+
+func newCSSProvider(css string) *gtk.CSSProvider {
+	prov := gtk.NewCSSProvider()
+	prov.ConnectParsingError(func(sec *gtk.CSSSection, err error) {
+		loc := sec.StartLocation()
+
+		lines := strings.Split(css, "\n")
+		log.Printf("CSS error (%v) at line: %q", err, lines[loc.Lines()])
+	})
+	prov.LoadFromData(css)
+	return prov
 }
