@@ -261,7 +261,9 @@ func (app *Application) NewWindow() *Window {
 func (app *Application) AddActionShortcuts(m map[string]string) {
 	actionAccels := make(map[string][]string, len(m))
 	for accel, action := range m {
-		action = strings.TrimPrefix(action, "app.")
+		if !strings.HasPrefix(action, "app.") {
+			action = "app." + action
+		}
 		actionAccels[action] = append(actionAccels[action], accel)
 	}
 
@@ -274,6 +276,11 @@ func (app *Application) AddActionShortcuts(m map[string]string) {
 
 		cfg := acquireState(app.ConfigPath("app-shortcuts"))
 		cfg.Each(func(k string, unmarshal func(interface{}) bool) bool {
+			if !strings.HasPrefix(k, "app.") {
+				log.Printf("app-shortcuts: action %q not prefixed with app, skipping", k)
+				return false
+			}
+
 			var action string
 			if !unmarshal(action) {
 				return false
@@ -281,6 +288,7 @@ func (app *Application) AddActionShortcuts(m map[string]string) {
 
 			actionAccels[k] = append(actionAccels[k], action)
 			changed = true
+
 			return false
 		})
 
