@@ -259,6 +259,18 @@ func (app *Application) NewWindow() *Window {
 	return &w
 }
 
+// AddActionShortcuts binds accelerator strings to action strings.
+func (app *Application) AddActionShortcuts(m map[string]string) {
+	actionAccels := make(map[string][]string, len(m))
+	for accel, action := range m {
+		action = strings.TrimPrefix(action, "app.")
+		actionAccels[action] = append(actionAccels[action], accel)
+	}
+	for action, accels := range actionAccels {
+		app.Application.SetAccelsForAction(action, accels)
+	}
+}
+
 // AddActions adds the given map of actions into the Application.
 func (app *Application) AddActions(m map[string]func()) {
 	for name, fn := range m {
