@@ -82,16 +82,24 @@ func IsActive(ctx context.Context) bool {
 }
 
 // New creates a new Application.
-func New(appID, appName string) *Application {
-	return NewWithFlags(appID, appName, gio.ApplicationFlagsNone)
+func New(ctx context.Context, appID, appName string) *Application {
+	return NewWithFlags(ctx, appID, appName, gio.ApplicationFlagsNone)
 }
 
 // NewWithFlags creates a new Application with the given application flags.
-func NewWithFlags(appID, appName string, flags gio.ApplicationFlags) *Application {
+func NewWithFlags(ctx context.Context, appID, appName string, flags gio.ApplicationFlags) *Application {
+	if ctx == nil {
+		panic("app: given ctx is nil")
+	}
+
 	app := &Application{
 		Application: gtk.NewApplication(appID, flags),
 		name:        appName,
 	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	app.ctx = ctx
+	app.Application.ConnectShutdown(cancel)
 
 	app.Application.ConnectStartup(func() {
 		// TODO: make this display-bound. gtkutil has code for that.
@@ -203,9 +211,6 @@ func filterAndLogErrors(prefix string, errors []error) []error {
 // called. This method will panic if it's called before Run is called. Use it
 // during initialization within signals.
 func (app *Application) Context() context.Context {
-	if app.ctx == nil {
-		panic("gotkit: Context called before Run")
-	}
 	return app.ctx
 }
 
@@ -216,15 +221,8 @@ func (app *Application) Quit() {
 
 // Run runs the application for as long as the context is alive. If a SIGINT is
 // sent, then the application is stopped.
-func (app *Application) Run(ctx context.Context, args []string) int {
-	if app.ctx != nil {
-		panic("Run called more than once")
-	}
-	if ctx == nil {
-		panic("Run given a nil context")
-	}
-
-	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
+func (app *Application) Run(args []string) int {
+	ctx, cancel := signal.NotifyContext(app.ctx, os.Interrupt)
 	defer cancel()
 
 	app.ctx = WithApplication(ctx, app)
@@ -238,8 +236,8 @@ func (app *Application) Run(ctx context.Context, args []string) int {
 }
 
 // RunMain is a convenient function around Run that uses os.Args and os.Exit.
-func (app *Application) RunMain(ctx context.Context) {
-	os.Exit(app.Run(ctx, os.Args))
+func (app *Application) RunMain() {
+	os.Exit(app.Run(os.Args))
 }
 
 // NewWindow creates a new Window bounded to the Application instance.
@@ -266,9 +264,37 @@ func (app *Application) AddActionShortcuts(m map[string]string) {
 		action = strings.TrimPrefix(action, "app.")
 		actionAccels[action] = append(actionAccels[action], accel)
 	}
+
 	for action, accels := range actionAccels {
 		app.Application.SetAccelsForAction(action, accels)
 	}
+
+	gtkutil.Async(app.ctx, func() func() {
+		var changed bool
+
+		cfg := acquireState(app.ConfigPath("app-shortcuts"))
+		cfg.Each(func(k string, unmarshal func(interface{}) bool) bool {
+			var action string
+			if !unmarshal(action) {
+				return false
+			}
+
+			actionAccels[k] = append(actionAccels[k], action)
+			changed = true
+			return false
+		})
+
+		if !changed {
+			return nil
+		}
+
+		return func() {
+			for action, accels := range actionAccels {
+				app.Application.SetAccelsForAction(action, accels)
+			}
+		}
+	})
+
 }
 
 // AddActions adds the given map of actions into the Application.
