@@ -13,7 +13,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotkit/app"
-	"github.com/diamondburned/gotkit/internal/cachegc"
+	"github.com/diamondburned/gotkit/utils/cachegc"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 )

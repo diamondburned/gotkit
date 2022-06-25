@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/diamondburned/gotkit/internal/config"
+	"github.com/diamondburned/gotkit/utils/config"
 )
 
 // State implements an easy API for storing persistent state that components can

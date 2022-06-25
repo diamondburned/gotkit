@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/gotkit/app/locale"
 	"github.com/diamondburned/gotkit/app/prefs"
 	"github.com/diamondburned/gotkit/gtkutil/cssutil"
-	"github.com/diamondburned/gotkit/internal/config"
+	"github.com/diamondburned/gotkit/utils/config"
 	"github.com/pkg/errors"
 )
 
