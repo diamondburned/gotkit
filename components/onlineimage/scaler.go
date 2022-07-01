@@ -45,24 +45,24 @@ func (p *pixbufScaler) ParentSize() (w, h int) {
 }
 
 func (p *pixbufScaler) init(parent *baseImage) {
-	if parent.set().SetFromPixbuf == nil {
+	if parent.setter.SetFromPixbuf == nil {
 		log.Panicf("pixbufScaler: baseImage %T missing SetFromPixbuf", parent.imageParent)
 	}
 
 	p.parent = parent
 
-	base := gtk.BaseWidget(parent)
+	base := gtk.BaseWidget(parent.parent)
 	base.ConnectMap(func() {
 		p.Invalidate()
 	})
 	base.NotifyProperty("scale-factor", func() {
-		gtkutil.SetScaleFactor(base.ScaleFactor())
+		gtkutil.SetScaleFactor(parent.scale())
 		p.Invalidate()
 	})
 }
 
 func (p *pixbufScaler) setParentPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
-	setter := p.parent.set()
+	setter := p.parent.setter
 	setter.SetFromPixbuf(pixbuf)
 }
 
@@ -75,9 +75,7 @@ func (p *pixbufScaler) invalidate() {
 		return
 	}
 
-	parent := gtk.BaseWidget(p.parent)
-
-	scale := parent.ScaleFactor()
+	scale := p.parent.scale()
 	if scale == 0 {
 		// No allocations yet.
 		return
@@ -105,7 +103,7 @@ func (p *pixbufScaler) invalidate() {
 	srcH := p.src.Height()
 
 	if dstW >= srcW || dstH >= srcH {
-		p.parent.set().SetFromPixbuf(p.src)
+		p.parent.setter.SetFromPixbuf(p.src)
 		return
 	}
 

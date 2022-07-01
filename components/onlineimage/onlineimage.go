@@ -31,7 +31,7 @@ func (c *AnimationController) Stop() {
 // OnHover binds the controller to a motion controller attached to the image
 // widget. When the user hovers over the image, the animation plays.
 func (c *AnimationController) OnHover() {
-	c.ConnectMotion(c.imageParent)
+	c.ConnectMotion(c.parent)
 }
 
 // ConnectMotion connects a motion controller to the given widget that will
@@ -45,12 +45,6 @@ func (c *AnimationController) ConnectMotion(w gtk.Widgetter) {
 	base.AddController(motion)
 }
 
-var (
-	_ imageParent = (*Avatar)(nil)
-	_ imageParent = (*Image)(nil)
-	_ imageParent = (*Picture)(nil)
-)
-
 // Avatar is an online variant of adaptive.Avatar.
 type Avatar struct {
 	*adaptive.Avatar
@@ -61,7 +55,7 @@ type Avatar struct {
 func NewAvatar(ctx context.Context, p imgutil.Provider, size int) *Avatar {
 	a := Avatar{Avatar: adaptive.NewAvatar(size)}
 	a.AddCSSClass("onlineimage")
-	a.base.init(ctx, &a, p)
+	a.base.init(ctx, imageParent{&a, a.Image, a.set()}, p)
 
 	return &a
 }
@@ -90,6 +84,18 @@ func (a *Avatar) set() imgutil.ImageSetter {
 	}
 }
 
+// type avatarParent struct {
+// 	*gtk.Image
+// 	avatar *Avatar
+// }
+
+// func (a avatarParent) set() imgutil.ImageSetter {
+// 	return imgutil.ImageSetter{
+// 		SetFromPixbuf:    a.avatar.SetFromPixbuf,
+// 		SetFromPaintable: a.avatar.SetFromPaintable,
+// 	}
+// }
+
 // Image is an online variant of gtk.Image.
 type Image struct {
 	*gtk.Image
@@ -100,7 +106,7 @@ type Image struct {
 func NewImage(ctx context.Context, p imgutil.Provider) *Image {
 	i := Image{Image: gtk.NewImage()}
 	i.AddCSSClass("onlineimage")
-	i.base.init(ctx, &i, p)
+	i.base.init(ctx, imageParent{&i, &i, i.set()}, p)
 
 	return &i
 }
@@ -139,7 +145,7 @@ type Picture struct {
 func NewPicture(ctx context.Context, prov imgutil.Provider) *Picture {
 	p := Picture{Picture: gtk.NewPicture()}
 	p.AddCSSClass("onlineimage")
-	p.base.init(ctx, &p, prov)
+	p.base.init(ctx, imageParent{&p, &p, p.set()}, prov)
 
 	return &p
 }

@@ -23,9 +23,28 @@ const MaxFPS = 50
 
 const maxFPSDelay = 1000 / MaxFPS
 
-type imageParent interface {
-	gtk.Widgetter
-	set() imgutil.ImageSetter
+type imageParent struct {
+	parent gtk.Widgetter
+	image  gtk.Widgetter
+	setter imgutil.ImageSetter
+}
+
+func (p imageParent) sizeRequest() (w, h int) {
+	base := gtk.BaseWidget(p.image)
+	return base.SizeRequest()
+}
+
+func (p imageParent) sizeAllocated() (w, h int) {
+	base := gtk.BaseWidget(p.image)
+	alloc := base.Allocation()
+	w = alloc.Width()
+	h = alloc.Height()
+	return
+}
+
+func (p imageParent) scale() int {
+	base := gtk.BaseWidget(p.image)
+	return base.ScaleFactor()
 }
 
 type baseImage struct {
@@ -52,7 +71,7 @@ func (b *baseImage) init(ctx context.Context, parent imageParent, p imgutil.Prov
 	b.prov = p
 	b.scaler.init(b)
 
-	b.ctx = gtkutil.WithVisibility(ctx, parent)
+	b.ctx = gtkutil.WithVisibility(ctx, parent.parent)
 	b.ctx.OnRenew(func(ctx context.Context) func() {
 		b.scaler.Invalidate()
 		b.fetch(ctx)
@@ -72,19 +91,6 @@ func (b *baseImage) SetFromURL(url string) {
 func (b *baseImage) refetch() {
 	b.ok = false
 	b.fetch(b.ctx.Take())
-}
-
-func (b *baseImage) sizeRequest() (w, h int) {
-	base := gtk.BaseWidget(b)
-	return base.SizeRequest()
-}
-
-func (b *baseImage) sizeAllocated() (w, h int) {
-	base := gtk.BaseWidget(b)
-	alloc := base.Allocation()
-	w = alloc.Width()
-	h = alloc.Height()
-	return
 }
 
 func (b *baseImage) fetch(ctx context.Context) {
@@ -133,7 +139,7 @@ func (b *baseImage) enableAnimation() *AnimationController {
 		b.animation.paused = pause
 	}
 
-	base := gtk.BaseWidget(b.imageParent)
+	base := gtk.BaseWidget(b.parent)
 	base.ConnectMap(func() { setPause(false) })
 	base.ConnectUnmap(func() { setPause(true) })
 
@@ -146,7 +152,7 @@ func (b *baseImage) enableAnimation() *AnimationController {
 			unbindRoot = nil
 		}
 
-		w, ok := rootWindow(gtk.BaseWidget(b.imageParent).Root())
+		w, ok := rootWindow(gtk.BaseWidget(b.parent).Root())
 		if ok {
 			s := w.NotifyProperty("is-active", func() {
 				// Pause animation on window unfocus.
@@ -156,7 +162,7 @@ func (b *baseImage) enableAnimation() *AnimationController {
 		}
 	}
 
-	b.NotifyProperty("root", bindRoot)
+	b.parent.NotifyProperty("root", bindRoot)
 	bindRoot()
 
 	return (*AnimationController)(b)
@@ -191,9 +197,9 @@ func (b *baseImage) startAnimation() {
 	}
 
 	iter := b.animation.pixbuf.Iter(nil)
-	setter := b.imageParent.set()
+	setter := b.imageParent.setter
 
-	base := gtk.BaseWidget(b.imageParent)
+	base := gtk.BaseWidget(b.parent)
 
 	w, h := b.sizeAllocated()
 
