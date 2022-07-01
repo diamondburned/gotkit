@@ -83,16 +83,18 @@ func (p *pixbufScaler) invalidate() {
 		return
 	}
 
-	dstW, dstH := p.parent.size()
+	dstW, dstH := p.parent.sizeRequest()
+	if dstW < 1 || dstH < 1 {
+		// No exact size requested, so we can't really scale relatively to that
+		// size. Use the original pixbuf.
+		p.setParentPixbuf(p.src)
+		return
+	}
+
 	if p.parentSz != [2]int{dstW, dstH} {
 		// Size changed, so invalidate all known pixbufs.
 		p.scales = pixbufScales{}
 		p.parentSz = [2]int{dstW, dstH}
-	}
-
-	if dstW == 0 || dstH == 0 {
-		// No allocations yet.
-		return
 	}
 
 	// Scale the width and height up.

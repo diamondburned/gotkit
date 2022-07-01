@@ -74,18 +74,16 @@ func (b *baseImage) refetch() {
 	b.fetch(b.ctx.Take())
 }
 
-func (b *baseImage) size() (w, h int) {
+func (b *baseImage) sizeRequest() (w, h int) {
 	base := gtk.BaseWidget(b)
+	return base.SizeRequest()
+}
 
-	w, h = base.SizeRequest()
-	if w > 0 && h > 0 {
-		return
-	}
-
-	rect := base.Allocation()
-	w = rect.Width()
-	h = rect.Height()
-
+func (b *baseImage) sizeAllocated() (w, h int) {
+	base := gtk.BaseWidget(b)
+	alloc := base.Allocation()
+	w = alloc.Width()
+	h = alloc.Height()
 	return
 }
 
@@ -197,16 +195,9 @@ func (b *baseImage) startAnimation() {
 
 	base := gtk.BaseWidget(b.imageParent)
 
+	w, h := b.sizeAllocated()
+
 	scale := base.ScaleFactor()
-	if scale == 0 {
-		return
-	}
-
-	w, h := b.size()
-	if w == 0 || h == 0 {
-		return
-	}
-
 	w *= scale
 	h *= scale
 
@@ -218,7 +209,7 @@ func (b *baseImage) startAnimation() {
 		ph := p.Height()
 
 		// See scaler.go's maxScale.
-		if (w < pw && pw < animMaxW) && (h < ph && ph < animMaxH) && scale <= maxScale {
+		if (w != 0 && h != 0) && (w < pw && pw < animMaxW) && (h < ph && ph < animMaxH) && scale <= maxScale {
 			// Scaling doesn't actually use that much more CPU than not, but it
 			// depends on how big the image is.
 			p = p.ScaleSimple(w, h, gdkpixbuf.InterpTiles)
