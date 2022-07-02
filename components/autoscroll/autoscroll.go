@@ -1,7 +1,9 @@
 package autoscroll
 
 import (
+	"log"
 	"math"
+	"time"
 
 	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -26,6 +28,9 @@ type Window struct {
 
 	onBottomed func()
 
+	fclock  gdk.FrameClocker
+	fsignal glib.SignalHandle
+
 	upperValue   float64
 	targetScroll float64
 	state        scrollState
@@ -38,18 +43,24 @@ func NewWindow() *Window {
 	}
 
 	w.ScrolledWindow = gtk.NewScrolledWindow()
-	w.ScrolledWindow.SetPropagateNaturalHeight(true)
-	w.ScrolledWindow.SetPlacement(gtk.CornerBottomLeft)
+	w.SetPropagateNaturalHeight(true)
+	w.SetPlacement(gtk.CornerBottomLeft)
 
 	w.vadj = w.ScrolledWindow.VAdjustment()
 
 	w.view = gtk.NewViewport(nil, w.vadj)
 	w.view.SetVScrollPolicy(gtk.ScrollNatural)
-	w.ScrolledWindow.SetChild(w.view)
+	w.SetChild(w.view)
 
-	w.bindFrameClock()
+	w.ConnectMap(func() {
+		w.fclock = w.FrameClock()
 
-	w.vadj.ConnectAfter("notify::upper", func() {
+		if !math.IsNaN(w.targetScroll) {
+			w.scrollTo(w.targetScroll)
+		}
+	})
+
+	w.vadj.NotifyProperty("upper", func() {
 		lastUpper := w.upperValue
 		w.upperValue = w.vadj.Upper()
 
@@ -57,13 +68,12 @@ func NewWindow() *Window {
 		case locked:
 			// Subtract the new value w/ the old value to get the new scroll
 			// offset, then add that to the value.
-			w.targetScroll = w.upperValue - lastUpper + w.vadj.Value()
+			w.scrollTo(w.upperValue - lastUpper + w.vadj.Value())
 		case bottomed:
-			w.targetScroll = w.upperValue
+			w.scrollTo(w.upperValue)
 		}
 	})
-
-	w.vadj.ConnectAfter("notify::value", func() {
+	w.vadj.NotifyProperty("value", func() {
 		// Skip if we're locked, since we're only updating this if the state is
 		// either bottomed or not.
 		if w.state.is(locked) {
@@ -75,7 +85,7 @@ func NewWindow() *Window {
 		// Bottom check.
 		if w.vadj.Value() >= (w.upperValue - w.vadj.PageSize()) {
 			w.state = bottomed
-			w.targetScroll = w.upperValue
+			w.scrollTo(w.upperValue)
 			w.emitBottomed()
 		} else {
 			w.state = 0
@@ -88,33 +98,6 @@ func NewWindow() *Window {
 // Viewport returns the ScrolledWindow's Viewport.
 func (w *Window) Viewport() *gtk.Viewport {
 	return w.view
-}
-
-func (w *Window) bindFrameClock() {
-	var clock *gdk.FrameClock
-	var signal glib.SignalHandle
-
-	w.ConnectMap(func() {
-		clock = gdk.BaseFrameClock(w.FrameClock())
-		// Layout gets called after the Adjustment's size-allocate, so we can
-		// set the scroll here. We can't in the notify callbacks, because
-		// that'll mess up the function.
-		signal = clock.ConnectLayout(func() {
-			// If the upper value changed, then update the current value
-			// accordingly.
-			if !math.IsNaN(w.targetScroll) {
-				w.vadj.SetValue(w.targetScroll)
-				w.targetScroll = math.NaN()
-			}
-		})
-	})
-
-	w.ConnectUnmap(func() {
-		if clock != nil {
-			clock.HandlerDisconnect(signal)
-			clock = nil
-		}
-	})
 }
 
 // VAdjustment overrides gtk.ScrolledWindow's.
@@ -144,7 +127,7 @@ func (w *Window) IsBottomed() bool {
 // ScrollToBottom scrolls the window to bottom.
 func (w *Window) ScrollToBottom() {
 	w.state = bottomed
-	w.targetScroll = w.upperValue
+	w.scrollTo(w.upperValue)
 }
 
 // OnBottomed registers the given function to be called when the user bottoms
@@ -177,4 +160,41 @@ func (w *Window) SetChild(child gtk.Widgetter) {
 		w.view.SetChild(child)
 		w.ScrolledWindow.SetChild(w.view)
 	}
+}
+
+// layoutAttachTime is a constant for n seconds. It means that the scroll
+// handler is called on every frame for n seconds to ensure a smooth scrolling
+// while things are first loaded.
+const layoutAttachTime = 1 * time.Second
+
+func (w *Window) scrollTo(targetScroll float64) {
+	w.targetScroll = targetScroll
+
+	if w.fsignal != 0 || w.fclock == nil {
+		return
+	}
+
+	clock := gdk.BaseFrameClock(w.fclock)
+	var t int64
+
+	// Layout gets called after the Adjustment's size-allocate, so we can
+	// set the scroll here. We can't in the notify callbacks, because
+	// that'll mess up the function.
+	w.fsignal = clock.ConnectLayout(func() {
+		w.vadj.SetValue(w.targetScroll)
+
+		if t == 0 {
+			const frameDuration = int64(layoutAttachTime / time.Microsecond)
+			t = clock.FrameTime() + frameDuration
+
+			return
+		}
+
+		if clock.FrameTime() > t {
+			clock.HandlerDisconnect(w.fsignal)
+			w.fsignal = 0
+			log.Println("scroll handler disconnected")
+		}
+	})
+	log.Println("scroll handler connected")
 }
