@@ -1,7 +1,6 @@
 package autoscroll
 
 import (
-	"log"
 	"math"
 	"time"
 
@@ -165,7 +164,7 @@ func (w *Window) SetChild(child gtk.Widgetter) {
 // layoutAttachTime is a constant for n seconds. It means that the scroll
 // handler is called on every frame for n seconds to ensure a smooth scrolling
 // while things are first loaded.
-const layoutAttachTime = 1 * time.Second
+const layoutAttachTime = 650 * time.Millisecond
 
 func (w *Window) scrollTo(targetScroll float64) {
 	w.targetScroll = targetScroll
@@ -175,26 +174,27 @@ func (w *Window) scrollTo(targetScroll float64) {
 	}
 
 	clock := gdk.BaseFrameClock(w.fclock)
-	var t int64
+
+	const frameDuration = int64(layoutAttachTime / time.Microsecond)
+	var lastTime int64
+	prevScroll := w.targetScroll
 
 	// Layout gets called after the Adjustment's size-allocate, so we can
 	// set the scroll here. We can't in the notify callbacks, because
 	// that'll mess up the function.
 	w.fsignal = clock.ConnectLayout(func() {
+		t := clock.FrameTime()
+
+		if prevScroll != w.targetScroll {
+			prevScroll = w.targetScroll
+			lastTime = t
+		}
+
 		w.vadj.SetValue(w.targetScroll)
 
-		if t == 0 {
-			const frameDuration = int64(layoutAttachTime / time.Microsecond)
-			t = clock.FrameTime() + frameDuration
-
-			return
-		}
-
-		if clock.FrameTime() > t {
+		if t > lastTime+frameDuration {
 			clock.HandlerDisconnect(w.fsignal)
 			w.fsignal = 0
-			log.Println("scroll handler disconnected")
 		}
 	})
-	log.Println("scroll handler connected")
 }
