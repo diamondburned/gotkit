@@ -256,7 +256,7 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 		// this.
 		f, err := os.Open(path)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "cannot open pixbuf file")
 		}
 		defer f.Close()
 
@@ -265,7 +265,7 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 
 	anim, err := gdkpixbuf.NewPixbufAnimationFromFile(path)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "cannot create new pixbuf animation")
 	}
 
 	glib.IdleAdd(func() {

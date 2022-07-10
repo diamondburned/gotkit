@@ -66,7 +66,7 @@ func markURLInvalid(url string) {
 	invalidURLs.Store(httputil.HashURL(url), time.Now().Unix())
 }
 
-func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) error {
+func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) (err error) {
 	if url == "" {
 		return errors.New("empty URL given")
 	}
@@ -78,21 +78,21 @@ func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) error 
 	cacheDir := app.FromContext(ctx).CachePath("img2")
 	cacheDst := urlPath(cacheDir, url)
 
-	err := loadPixbufFromFile(ctx, cacheDst, img, o)
-	cachegc.Do(cacheDir, CacheAge)
-
-	if err == nil {
+	if err = loadPixbufFromFile(ctx, cacheDst, img, o); err == nil {
 		return nil
 	}
 
-	if err := fetchURL(ctx, url, cacheDst); err == nil {
-		return loadPixbufFromFile(ctx, cacheDst, img, o)
+	if err = fetchURL(ctx, url, cacheDst); err == nil {
+		cachegc.Do(cacheDir, CacheAge)
+		if err = loadPixbufFromFile(ctx, cacheDst, img, o); err == nil {
+			return nil
+		}
 	}
 
 	// See if this is a cache error. If it is, then just don't use the cache
 	// at all.
 	if cachegc.IsCacheError(err) {
-		log.Println("cache error, falling back to HTTP:", err)
+		log.Println("cache error:", err, "(falling back to HTTP)")
 
 		r, err := getBody(ctx, url)
 		if err != nil {
@@ -147,15 +147,9 @@ func fetchURL(ctx context.Context, url, cacheDst string) error {
 
 	// Small time between the response being read and the file being created on
 	// the disk, which might be an issue on slow computers, but whatever.
-	err := cachegc.WithTmpFile(cacheDst, "*", func(f *os.File) error {
+	return cachegc.WithTmpFile(cacheDst, "*", func(f *os.File) error {
 		return downloadTo(ctx, url, f)
 	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func downloadTo(ctx context.Context, url string, w io.Writer) error {
