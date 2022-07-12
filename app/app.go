@@ -35,6 +35,15 @@ func init() {
 	glib.LogUseDefaultLogger()
 }
 
+var appHooks []func(*Application)
+
+// Hook adds a new hook callback to be called during construction of an
+// Application. This function allows injecting initialization function calls
+// such as Adwaita's without having to explicitly write it in main().
+func Hook(f func(*Application)) {
+	appHooks = append(appHooks, f)
+}
+
 // Application describes the state of a Matrix application.
 type Application struct {
 	*gtk.Application
@@ -138,6 +147,10 @@ func NewWithFlags(ctx context.Context, appID, appName string, flags gio.Applicat
 
 		return configPath
 	})
+
+	for _, hook := range appHooks {
+		hook(app)
+	}
 
 	return app
 }
