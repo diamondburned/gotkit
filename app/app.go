@@ -31,10 +31,6 @@ import (
 		Painful
 */
 
-func init() {
-	glib.LogUseDefaultLogger()
-}
-
 var appHooks []func(*Application)
 
 // Hook adds a new hook callback to be called during construction of an
