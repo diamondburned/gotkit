@@ -313,7 +313,9 @@ func BindPopoverMenuCustom(w gtk.Widgetter, pos gtk.PositionType, pairs []Popove
 			return
 		}
 
-		at := gdk.NewRectangle(int(x), int(y), 0, 0)
+		var at gdk.Rectangle
+		at.SetX(int(x))
+		at.SetY(int(y))
 		popover.SetPointingTo(&at)
 		PopupFinally(popover)
 	})
