@@ -129,8 +129,9 @@ type truncator struct {
 }
 
 var longTruncators = []truncator{
-	{d: Day, s: "Today at %X"},
-	{d: Week, s: "Monday at %X"},
+	{d: 1 * Day, s: "Today at %X"},
+	{d: 2 * Day, s: "Yesterday at %X"},
+	{d: Week, s: "%A at %X"},
 	{d: -1, s: "%X %x"},
 }
 
