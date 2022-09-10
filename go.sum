@@ -1,8 +1,8 @@
 github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399 h1:MGJoYuTUukTa+y3XIAvQQmZAOO2JeRTefkdxhsoPfSY=
 github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399/go.mod h1:cLoCdQtpCp/TSJBJTgXe7W2FJNelXrmPv+X7luB6/Qg=
 github.com/diamondburned/gotk4/pkg v0.0.0-20220225135826-2bb7260a63bb/go.mod h1:dJ2gfR0gvBsGg4IteP8aMBq/U5Q9boDw0DP7kAjXTwM=
-github.com/diamondburned/gotk4/pkg v0.0.0-20220725071938-a40a809cc7a4 h1:+5i5G0rVOMIufreJCByFnhiL6sUkRZiWmNlX4LEqWvA=
-github.com/diamondburned/gotk4/pkg v0.0.0-20220725071938-a40a809cc7a4/go.mod h1:pjOFSZWuNWiBwEqt+4/zfPr1JsNWY43h4B81ht3S3Ag=
+github.com/diamondburned/gotk4/pkg v0.0.0-20220910082532-b037befdd54e h1:F5+VsBh9RnYztCau3ymezaTV6OhjMZuSPBLrNy2dAQk=
+github.com/diamondburned/gotk4/pkg v0.0.0-20220910082532-b037befdd54e/go.mod h1:pjOFSZWuNWiBwEqt+4/zfPr1JsNWY43h4B81ht3S3Ag=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 go4.org/unsafe/assume-no-moving-gc v0.0.0-20201222180813-1025295fd063/go.mod h1:FftLjUGFEDu5k8lt0ddY+HcrH/qU/0qk+H8j9/nTl3E=

@@ -310,8 +310,6 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 	return nil
 }
 
-var errNilPixbuf = errors.New("nil pixbuf")
-
 func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error {
 	var size [2]int
 
@@ -353,6 +351,7 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 		}
 
 		anim := loader.Animation()
+		glib.Destroy(loader)
 
 		if img.SetFromAnimation != nil && !anim.IsStaticImage() {
 			// Is actually a real animation. Call SetFromAnimation instead
