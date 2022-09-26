@@ -1,7 +1,9 @@
 package mediautil
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -24,6 +26,18 @@ func MIME(f io.ReadSeeker) string {
 	f.Seek(0, io.SeekStart)
 
 	return detectCT(buf[:n])
+}
+
+func MIMEBuffered(r io.Reader) (newReader io.Reader, mime string) {
+	bufReader := bufio.NewReaderSize(r, 512)
+
+	buf, err := bufReader.Peek(512)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return bufReader, ""
+	}
+
+	mime = detectCT(buf)
+	return bufReader, mime
 }
 
 // FileSize gets the size of the given gio.Filer.

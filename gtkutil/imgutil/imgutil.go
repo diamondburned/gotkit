@@ -3,6 +3,7 @@ package imgutil
 import (
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"math"
@@ -15,7 +16,9 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil"
+	"github.com/diamondburned/gotkit/gtkutil/mediautil"
 	"github.com/pkg/errors"
+	"golang.org/x/image/webp"
 )
 
 type ctxKey uint8
@@ -63,6 +66,20 @@ func (o *Opts) processOpts(funcs []OptFunc) {
 func (o *Opts) needDone() {
 	if o.done != nil {
 		panic("o.done is already set")
+	}
+}
+
+func (o *Opts) applySizer(w, h int) {
+	if o.sizer.set != nil {
+		maxW, maxH := o.sizer.w, o.sizer.h
+		if maxW == 0 && maxH == 0 {
+			maxW, maxH = o.sizer.set.SizeRequest()
+		}
+		if maxW == 0 && maxH == 0 {
+			maxW, maxH = o.w, o.h
+		}
+
+		o.sizer.set.SetSizeRequest(MaxSize(w, h, maxW, maxH))
 	}
 }
 
@@ -254,18 +271,12 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 	if o.w > 0 && o.h > 0 {
 		// Slow path, since we need to use PixbufLoader to be able to rescale
 		// this.
-		f, err := os.Open(path)
-		if err != nil {
-			return errors.Wrap(err, "cannot open pixbuf file")
-		}
-		defer f.Close()
-
-		return loadPixbuf(ctx, f, img, o)
+		return loadPixbufFileManual(ctx, path, img, o)
 	}
 
 	anim, err := gdkpixbuf.NewPixbufAnimationFromFile(path)
 	if err != nil {
-		return errors.Wrap(err, "cannot create new pixbuf animation")
+		return loadPixbufFileManual(ctx, path, img, o)
 	}
 
 	glib.IdleAdd(func() {
@@ -276,17 +287,7 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 		}
 
 		if o.sizer.set != nil {
-			maxW, maxH := o.sizer.w, o.sizer.h
-			if maxW == 0 && maxH == 0 {
-				maxW, maxH = o.sizer.set.SizeRequest()
-			}
-			if maxW == 0 && maxH == 0 {
-				maxW, maxH = o.w, o.h
-			}
-
-			w := anim.Width()
-			h := anim.Height()
-			o.sizer.set.SetSizeRequest(MaxSize(w, h, maxW, maxH))
+			o.applySizer(anim.Width(), anim.Height())
 		}
 
 		if img.SetFromAnimation != nil && !anim.IsStaticImage() {
@@ -306,11 +307,50 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 			return
 		}
 	})
-
 	return nil
 }
 
+func loadPixbufFileManual(ctx context.Context, path string, img ImageSetter, o Opts) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return errors.Wrap(err, "cannot open pixbuf file")
+	}
+	defer f.Close()
+
+	return loadPixbuf(ctx, f, img, o)
+}
+
+var supportedMIMEsData map[string]struct{}
+
+func supportedMIME(mime string) bool {
+	if supportedMIMEsData == nil {
+		formats := gdkpixbuf.PixbufGetFormats()
+		supportedMIMEsData = make(map[string]struct{}, len(formats))
+
+		for _, format := range formats {
+			for _, mimeType := range format.MIMETypes() {
+				supportedMIMEsData[mimeType] = struct{}{}
+			}
+		}
+	}
+
+	_, ok := supportedMIMEsData[mime]
+	return ok
+}
+
 func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error {
+	var mime string
+	r, mime = mediautil.MIMEBuffered(r)
+
+	if !supportedMIME(mime) {
+		switch mime {
+		case "image/webp":
+			return loadStdImage(ctx, newWebPDecoder(r), img, o)
+		default:
+			log.Printf("got unknown image type %q, continuing anyway", mime)
+		}
+	}
+
 	var size [2]int
 
 	loader := gdkpixbuf.NewPixbufLoader()
@@ -372,6 +412,43 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 	})
 
 	return nil
+}
+
+func loadStdImage(ctx context.Context, decoder func() (image.Image, error), setter ImageSetter, o Opts) error {
+	img, err := decoder()
+	if err != nil {
+		return errors.Wrap(err, "cannot decode image")
+	}
+
+	pixbuf := gdkpixbuf.NewPixbufFromImage(img)
+
+	glib.IdleAdd(func() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if o.sizer.set != nil {
+			o.applySizer(pixbuf.Width(), pixbuf.Height())
+		}
+
+		if setter.SetFromPixbuf != nil {
+			setter.SetFromPixbuf(pixbuf)
+			return
+		}
+
+		if setter.SetFromPaintable != nil {
+			setter.SetFromPaintable(gdk.NewTextureForPixbuf(pixbuf))
+			return
+		}
+	})
+
+	return nil
+}
+
+func newWebPDecoder(r io.Reader) func() (image.Image, error) {
+	return func() (image.Image, error) { return webp.Decode(r) }
 }
 
 const defaultBufsz = 1 << 17 // 128KB
