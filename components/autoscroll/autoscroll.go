@@ -197,4 +197,6 @@ func (w *Window) scrollTo(targetScroll float64) {
 			w.fsignal = 0
 		}
 	})
+
+	w.QueueDraw()
 }
