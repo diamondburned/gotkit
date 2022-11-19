@@ -82,7 +82,8 @@ func NewWindow() *Window {
 		w.upperValue = w.vadj.Upper()
 
 		// Bottom check.
-		if w.vadj.Value() >= (w.upperValue - w.vadj.PageSize()) {
+		bottom := w.upperValue - w.vadj.PageSize()
+		if (bottom < 0) || (w.vadj.Value() >= bottom) {
 			w.state = bottomed
 			w.scrollTo(w.upperValue)
 			w.emitBottomed()
@@ -198,5 +199,6 @@ func (w *Window) scrollTo(targetScroll float64) {
 		}
 	})
 
+	w.QueueAllocate()
 	w.QueueDraw()
 }
