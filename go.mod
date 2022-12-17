@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399
-	github.com/diamondburned/gotk4/pkg v0.0.0-20220925114733-8c5529b9df15
+	github.com/diamondburned/gotk4/pkg v0.0.0-20221214003552-2d57ba75df52
 	github.com/pkg/errors v0.9.1
 	golang.org/x/image v0.0.0-20220902085622-e7cb96979f69
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
@@ -12,6 +12,6 @@ require (
 )
 
 require (
-	go4.org/unsafe/assume-no-moving-gc v0.0.0-20211027215541-db492cf91b37 // indirect
+	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
 	golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e // indirect
 )

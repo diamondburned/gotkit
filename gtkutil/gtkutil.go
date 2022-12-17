@@ -237,7 +237,7 @@ func SignalToggler(signal string, f interface{}) func(obj coreglib.Objector) {
 		}
 
 		lastObj = obj
-		lastSig = obj.Connect(signal, f)
+		lastSig = glib.BaseObject(obj).Connect(signal, f)
 	}
 }
 

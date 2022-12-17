@@ -454,7 +454,7 @@ func bindPropWidget(p Prop, w gtk.Widgetter, changed string, funcs propFuncs) {
 	}
 
 	for _, signal := range strings.Split(changed, ",") {
-		w.Connect(signal, activate)
+		gtk.BaseWidget(w).Connect(signal, activate)
 	}
 
 	p.Pubsubber().SubscribeWidget(w, func() {
