@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -24,13 +26,12 @@ const (
 	Message = "message"
 )
 
-type mediaFile struct {
-	*gtk.MediaFile
-	ID    string
-	Error error
-}
+var (
+	fileExistsCache  sync.Map
+	soundsLastPlayed sync.Map
+)
 
-var mediaFiles = map[string]mediaFile{}
+const soundDebounce = 200 * time.Millisecond
 
 // Play plays the given sound ID. It first uses Canberra, falling back to
 // ~/.cache/gotktrix/{id}.opus, then the embedded audio (if any), then
@@ -39,22 +40,21 @@ var mediaFiles = map[string]mediaFile{}
 // Play is asynchronous; it returning does not mean the audio has successfully
 // been played to the user.
 func Play(app *app.Application, id string) {
-	glib.IdleAdd(func() {
-		media, ok := mediaFiles[id]
-		if ok {
-			if media.Error != nil {
-				playEmbedError(media.ID, media.Error)
-			} else {
-				media.Play()
-			}
-			return
-		}
-
-		go play(app, id)
-	})
+	go play(app, id)
 }
 
 func play(app *app.Application, id string) {
+	now := time.Now()
+
+	if t, ok := soundsLastPlayed.Load(id); ok {
+		t := t.(time.Time)
+		if now.Sub(t) < soundDebounce {
+			return
+		}
+	}
+
+	soundsLastPlayed.Store(id, now)
+
 	name := id
 	if filepath.Ext(name) == "" {
 		name += ".opus"
@@ -63,44 +63,41 @@ func play(app *app.Application, id string) {
 	// app := app.FromContext(ctx)
 	dst := app.CachePath("sounds", name)
 
-	_, err := os.Stat(dst)
-	if err != nil {
-		canberra := exec.Command("canberra-gtk-play", "--id", id)
-		if err := canberra.Run(); err == nil {
-			return
-		} else {
-			log.Println("canberra error:", err)
-		}
+	var fileExists bool
 
-		if err := copyToFS(dst, name); err != nil {
-			log.Printf("cannot copy sound %q: %v", id, err)
-			glib.IdleAdd(beep)
-			return
-		}
+	if b, ok := fileExistsCache.Load(dst); ok && b.(bool) {
+		fileExists = true
+	} else {
+		_, err := os.Stat(dst)
+		fileExists = err == nil
+		fileExistsCache.Store(id, fileExists)
 	}
 
-	glib.IdleAdd(func() {
-		media, ok := mediaFiles[id]
-		if !ok {
-			media = mediaFile{
-				MediaFile: gtk.NewMediaFileForFilename(dst),
-				ID:        id,
-				Error:     nil,
-			}
-			mediaFiles[id] = media
-		}
-
-		media.NotifyProperty("error", func() {
-			f := mediaFiles[id]
-			f.Error = media.MediaFile.Error()
-			mediaFiles[id] = f
-
-			playEmbedError(id, f.Error)
+	if fileExists {
+		glib.IdleAdd(func() {
+			media := gtk.NewMediaFileForFilename(dst)
+			media.NotifyProperty("error", func() {
+				fileExistsCache.Delete(id)
+				playEmbedError(id, media.Error())
+			})
+			// Not sure if this leaks.
+			media.Play()
 		})
+		return
+	}
 
-		media.Play()
-	})
+	canberra := exec.Command("canberra-gtk-play", "--id", id)
+	if err := canberra.Run(); err == nil {
+		return
+	} else {
+		log.Println("canberra error:", err)
+	}
 
+	if err := copyToFS(dst, name); err != nil {
+		log.Printf("cannot copy sound %q: %v", id, err)
+		glib.IdleAdd(beep)
+		return
+	}
 }
 
 func playEmbedError(name string, err error) {
