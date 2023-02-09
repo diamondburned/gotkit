@@ -84,6 +84,7 @@ func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) (err e
 
 	if err = fetchURL(ctx, url, cacheDst); err == nil {
 		cachegc.Do(cacheDir, CacheAge)
+		// TODO: support MediaFile
 		if err = loadPixbufFromFile(ctx, cacheDst, img, o); err == nil {
 			return nil
 		}
