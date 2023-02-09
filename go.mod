@@ -12,6 +12,6 @@ require (
 )
 
 require (
-	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
+	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230209150437-ee73d164e760 // indirect
 	golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e // indirect
 )
