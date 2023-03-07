@@ -416,3 +416,23 @@ func eachMonitor(list gio.ListModeller, f func(*gdk.Monitor)) {
 		obj = list.Item(i)
 	}
 }
+
+// RecursiveUnfuck calls WipeAllClosures on the widget tree.
+func RecursiveUnfuck(w gtk.Widgetter) {
+	log.Println("recursively unfucking", w)
+	defer log.Println("done unfucking", w)
+
+	stack := []gtk.Widgetter{w}
+	for len(stack) > 0 {
+		w := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		coreglib.WipeAllClosures(w)
+
+		child := gtk.BaseWidget(w).FirstChild()
+		for child != nil {
+			stack = append(stack, child)
+			child = gtk.BaseWidget(child).NextSibling()
+		}
+	}
+}

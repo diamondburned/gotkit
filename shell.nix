@@ -12,4 +12,9 @@ in import "${gotk4-nix}/shell.nix" {
 		pname = "gotkit";
 		version = "dev";
 	};
+
+	buildInputs = pkgs: with pkgs; [
+		# staticcheck takes forever to build gotk4 twice. I'm good.
+		(writeShellScriptBin "staticcheck" "")
+	];
 }

@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399
-	github.com/diamondburned/gotk4/pkg v0.0.0-20221214003552-2d57ba75df52
+	github.com/diamondburned/gotk4/pkg v0.0.5-0.20230307013122-e86c9b44a4bf
 	github.com/pkg/errors v0.9.1
 	golang.org/x/image v0.0.0-20220902085622-e7cb96979f69
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
