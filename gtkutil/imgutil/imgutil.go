@@ -8,7 +8,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"sync"
 
 	"github.com/diamondburned/gotk4/pkg/core/gioutil"
 	"github.com/diamondburned/gotk4/pkg/core/glib"
@@ -271,17 +270,20 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 	if o.w > 0 && o.h > 0 {
 		// Slow path, since we need to use PixbufLoader to be able to rescale
 		// this.
+		log.Println("loadPixbufFromFile: using loadPixbufFileManual because rescaling is needed")
 		return loadPixbufFileManual(ctx, path, img, o)
 	}
 
 	anim, err := gdkpixbuf.NewPixbufAnimationFromFile(path)
 	if err != nil {
+		log.Println("loadPixbufFromFile: PixbufAnimationFromFile failed, manually loading it; error:", err)
 		return loadPixbufFileManual(ctx, path, img, o)
 	}
 
 	glib.IdleAdd(func() {
 		select {
 		case <-ctx.Done():
+			log.Println("loadPixbufFromFile: cannot set:", ctx.Err())
 			return
 		default:
 		}
@@ -306,7 +308,10 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 			img.SetFromPaintable(gdk.NewTextureForPixbuf(anim.StaticImage()))
 			return
 		}
+
+		log.Printf("was unable to load image for ImageSetter")
 	})
+
 	return nil
 }
 
@@ -341,6 +346,7 @@ func supportedMIME(mime string) bool {
 func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error {
 	var mime string
 	r, mime = mediautil.MIMEBuffered(r)
+	log.Println("loadPixbuf: manually loading image of MIME type", mime)
 
 	if !supportedMIME(mime) {
 		switch mime {
@@ -372,8 +378,11 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 	}
 
 	glib.IdleAdd(func() {
+		defer glib.WipeAllClosures(loader)
+
 		select {
 		case <-ctx.Done():
+			log.Println("loadPixbuf: cannot load image:", ctx.Err())
 			return
 		default:
 		}
@@ -391,7 +400,6 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 		}
 
 		anim := loader.Animation()
-		glib.Destroy(loader)
 
 		if img.SetFromAnimation != nil && !anim.IsStaticImage() {
 			// Is actually a real animation. Call SetFromAnimation instead
@@ -409,6 +417,8 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 			img.SetFromPaintable(gdk.NewTextureForPixbuf(anim.StaticImage()))
 			return
 		}
+
+		log.Printf("was unable to load image for ImageSetter")
 	})
 
 	return nil
@@ -425,6 +435,7 @@ func loadStdImage(ctx context.Context, decoder func() (image.Image, error), sett
 	glib.IdleAdd(func() {
 		select {
 		case <-ctx.Done():
+			log.Println("loadStdImage: cannot set:", ctx.Err())
 			return
 		default:
 		}
@@ -442,6 +453,8 @@ func loadStdImage(ctx context.Context, decoder func() (image.Image, error), sett
 			setter.SetFromPaintable(gdk.NewTextureForPixbuf(pixbuf))
 			return
 		}
+
+		log.Printf("was unable to load image for ImageSetter")
 	})
 
 	return nil
@@ -451,20 +464,8 @@ func newWebPDecoder(r io.Reader) func() (image.Image, error) {
 	return func() (image.Image, error) { return webp.Decode(r) }
 }
 
-const defaultBufsz = 1 << 17 // 128KB
-
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, defaultBufsz)
-		return &b
-	},
-}
-
 func pixbufLoaderReadFrom(l *gdkpixbuf.PixbufLoader, r io.Reader) error {
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
-
-	_, err := io.CopyBuffer(gioutil.PixbufLoaderWriter(l), r, *buf)
+	_, err := io.Copy(gioutil.PixbufLoaderWriter(l), r)
 	if err != nil {
 		l.Close()
 		return err
