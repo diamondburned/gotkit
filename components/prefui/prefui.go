@@ -169,6 +169,10 @@ func newDialog(ctx context.Context) *Dialog {
 	d.Dialog.SetDefaultSize(400, 500)
 	d.Dialog.SetChild(outerBox)
 
+	if app.IsDevel() {
+		d.Dialog.AddCSSClass("devel")
+	}
+
 	// Set this to the whole dialog instead of just the child.
 	d.search.SetKeyCaptureWidget(d.Dialog)
 

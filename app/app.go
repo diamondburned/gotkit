@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -18,6 +19,33 @@ import (
 
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 )
+
+var isDevel bool
+
+func init() {
+	build, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	find := func(k string) string {
+		for _, s := range build.Settings {
+			if s.Key == k {
+				return s.Value
+			}
+		}
+		return ""
+	}
+
+	modified := find("vcs.modified")
+	if modified == "true" {
+		isDevel = true
+	}
+}
+
+// IsDevel returns true if the windows spawned using app will have the .devel
+// class. This returns true if Go reports that vcs.modified is true.
+func IsDevel() bool { return isDevel }
 
 /*
 	_diamondburned_ — Today at 16:52
@@ -256,6 +284,10 @@ func (app *Application) NewWindow() *Window {
 
 	// Initialize the scale factor state.
 	gtkutil.ScaleFactor()
+
+	if isDevel {
+		window.AddCSSClass("devel")
+	}
 
 	w := Window{
 		Window: window.Window,
