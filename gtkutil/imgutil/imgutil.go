@@ -360,7 +360,11 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 	var size [2]int
 
 	loader := gdkpixbuf.NewPixbufLoader()
+
+	loaderWeak := glib.NewWeakRef(loader)
 	loader.ConnectSizePrepared(func(w, h int) {
+		loader := loaderWeak.Get()
+
 		if o.w > 0 && o.h > 0 {
 			if w != o.w || h != o.h {
 				w, h = MaxSize(w, h, o.w, o.h)
