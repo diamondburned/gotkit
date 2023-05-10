@@ -212,8 +212,25 @@ func WithRectRescale(size int) OptFunc {
 // WithRescale rescales the image to the given max width and height while
 // respecting its aspect ratio. The given sizes will be used as the maximum
 // sizes.
+//
+// Deprecated: Use WithMaxSize instead.
 func WithRescale(w, h int) OptFunc {
-	return func(o *Opts) { o.w, o.h = w, h }
+	return WithMaxSize(w, h)
+}
+
+// WithMaxSize sets the maximum size of the image. The image will be scaled down
+// to fit the size while respecting its aspect ratio. If the screen is HiDPI,
+// then the size will be scaled up.
+func WithMaxSize(w, h int) OptFunc {
+	return func(o *Opts) {
+		o.w, o.h = w, h
+
+		// Scale our max size by the scale factor so that it works well on
+		// HiDPI screens.
+		scale := gtkutil.ScaleFactor()
+		o.w *= scale
+		o.h *= scale
+	}
 }
 
 // WithSizeOverrider overrides the widget's size request to be of the given
@@ -366,10 +383,8 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 		loader := loaderWeak.Get()
 
 		if o.w > 0 && o.h > 0 {
-			if w != o.w || h != o.h {
-				w, h = MaxSize(w, h, o.w, o.h)
-				loader.SetSize(w, h)
-			}
+			w, h = MaxSize(w, h, o.w, o.h)
+			loader.SetSize(w, h)
 		}
 
 		if o.sizer.set != nil {
@@ -382,8 +397,6 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 	}
 
 	glib.IdleAdd(func() {
-		defer glib.WipeAllClosures(loader)
-
 		select {
 		case <-ctx.Done():
 			log.Println("loadPixbuf: cannot load image:", ctx.Err())
