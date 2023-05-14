@@ -41,7 +41,7 @@ func templateCSS(name, css string) string {
 	t.Delims("{$", "}")
 	t.Funcs(globalVariables)
 
-	t, err = t.Parse(globalCSS.String())
+	t, err = t.Parse(css)
 	if err != nil {
 		log.Panicf("cannot parse CSS template %s: %v", name, err)
 	}
