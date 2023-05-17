@@ -152,8 +152,8 @@ func RemoveChildren(w gtk.Widgetter) {
 
 	for w != nil {
 		b := gtk.BaseWidget(w)
-		b.Unparent()
 		w = b.NextSibling()
+		b.Unparent()
 	}
 }
 
