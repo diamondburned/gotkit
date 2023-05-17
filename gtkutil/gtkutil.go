@@ -142,6 +142,21 @@ func EachChild(w gtk.Widgetter, f func(child gtk.Widgetter) bool) {
 	}
 }
 
+// RemoveChildren removes all children from w.
+func RemoveChildren(w gtk.Widgetter) {
+	if w == nil {
+		return
+	}
+
+	w = gtk.BaseWidget(w).FirstChild()
+
+	for w != nil {
+		b := gtk.BaseWidget(w)
+		b.Unparent()
+		w = b.NextSibling()
+	}
+}
+
 // BindKeys binds the event controller returned from NewKeybinds being given the
 // map to the given widget.
 func BindKeys(w gtk.Widgetter, accelFns map[string]func() bool) {
