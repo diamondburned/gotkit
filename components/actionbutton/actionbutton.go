@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
+	"github.com/diamondburned/gotkit/app/locale"
 )
 
 // Button is an action button that contains an icon and a label.
@@ -16,12 +17,12 @@ type Button struct {
 
 // NewButton creates a new button. The icon's position is determined by the
 // given position type.
-func NewButton(label, icon string, pos gtk.PositionType) *Button {
+func NewButton(label locale.Localized, icon string, pos gtk.PositionType) *Button {
 	img := gtk.NewImageFromIconName(icon)
 	img.SetIconSize(gtk.IconSizeNormal)
 	img.SetMarginBottom(1)
 
-	lbl := gtk.NewLabel(label)
+	lbl := gtk.NewLabel(label.String())
 
 	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
 

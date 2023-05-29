@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
+	"github.com/diamondburned/gotkit/app/locale"
 )
 
 // ActionFunc creates a CallbackActionFunc from a function.
@@ -138,7 +139,7 @@ type ActionCallback struct {
 	ArgType *glib.VariantType
 }
 
-// BindActionCallbackMap is a moer verbose variant of BindActionMap.
+// BindActionCallbackMap is a more verbose variant of BindActionMap.
 func BindActionCallbackMap(w gtk.Widgetter, m map[string]ActionCallback) {
 	actions := make(map[string]*gio.SimpleActionGroup)
 
@@ -162,8 +163,8 @@ func BindActionCallbackMap(w gtk.Widgetter, m map[string]ActionCallback) {
 	}
 }
 
-func NewCustomMenuItem(label, id string) *gio.MenuItem {
-	item := gio.NewMenuItem(label, id)
+func NewCustomMenuItem(label locale.Localized, id string) *gio.MenuItem {
+	item := gio.NewMenuItem(label.String(), id)
 	setCustomMenuItem(item, id)
 	return item
 }
@@ -178,7 +179,7 @@ func setCustomMenuItem(item *gio.MenuItem, id string) {
 func MenuPair(pairs [][2]string) *gio.Menu {
 	menu := gio.NewMenu()
 	for _, pair := range pairs {
-		menu.Append(pair[0], pair[1])
+		menu.Append(locale.Get(pair[0]), pair[1])
 	}
 	return menu
 }
@@ -241,7 +242,7 @@ type PopoverMenuItem interface {
 }
 
 type popoverMenuItem struct {
-	label  string
+	label  locale.Localized
 	action string
 	icon   string
 	widget gtk.Widgetter
@@ -251,7 +252,7 @@ func (p popoverMenuItem) menu() {}
 
 // MenuItem creates a simple popover menu item. If action is empty, then the
 // item is disabled; if action is "---", then a new section is created.
-func MenuItem(label, action string, ands ...bool) PopoverMenuItem {
+func MenuItem(label locale.Localized, action string, ands ...bool) PopoverMenuItem {
 	for _, and := range ands {
 		if !and {
 			return nil
@@ -265,7 +266,7 @@ func MenuItem(label, action string, ands ...bool) PopoverMenuItem {
 }
 
 // MenuItemIcon is an icon variant of MenuItem.
-func MenuItemIcon(label, action, icon string) PopoverMenuItem {
+func MenuItemIcon(label locale.Localized, action, icon string) PopoverMenuItem {
 	return popoverMenuItem{
 		label:  label,
 		action: action,
@@ -282,7 +283,7 @@ func MenuWidget(action string, w gtk.Widgetter) PopoverMenuItem {
 }
 
 // MenuSeparator creates a new menu separator.
-func MenuSeparator(label string) PopoverMenuItem {
+func MenuSeparator(label locale.Localized) PopoverMenuItem {
 	return popoverMenuItem{
 		label:  label,
 		action: "---",
@@ -290,14 +291,14 @@ func MenuSeparator(label string) PopoverMenuItem {
 }
 
 type submenu struct {
-	label string
+	label locale.Localized
 	items []PopoverMenuItem
 }
 
 func (p submenu) menu() {}
 
 // Submenu creates a popover menu item that is a submenu.
-func Submenu(label string, sub []PopoverMenuItem) PopoverMenuItem {
+func Submenu(label locale.Localized, sub []PopoverMenuItem) PopoverMenuItem {
 	return submenu{
 		label: label,
 		items: sub,
@@ -356,11 +357,11 @@ func addMenuItems(menu *gio.Menu, items []PopoverMenuItem, widgets map[string]gt
 
 			if item.action == "---" {
 				section = gio.NewMenu()
-				menu.AppendSection(item.label, section)
+				menu.AppendSection(item.label.String(), section)
 				continue
 			}
 
-			menu := gio.NewMenuItem(item.label, item.action)
+			menu := gio.NewMenuItem(item.label.String(), item.action)
 			if item.icon != "" {
 				menu.SetIcon(gio.NewThemedIcon(item.icon))
 			}
@@ -374,7 +375,7 @@ func addMenuItems(menu *gio.Menu, items []PopoverMenuItem, widgets map[string]gt
 			sub := gio.NewMenu()
 			if addMenuItems(sub, item.items, widgets) > 0 {
 				added++
-				section.AppendSubmenu(item.label, sub)
+				section.AppendSubmenu(item.label.String(), sub)
 			}
 		default:
 			log.Panicf("unknown menu item type %T", item)
@@ -436,7 +437,7 @@ func NewPopoverMenuFromPairs(pairs [][2]string) *gtk.PopoverMenu {
 // NewRadioButtons.
 type RadioData struct {
 	Current int
-	Options []string
+	Options []locale.Localized
 }
 
 // NewRadioButtons creates a new box of radio buttons.
@@ -449,7 +450,7 @@ func NewRadioButtons(d RadioData, f func(int)) gtk.Widgetter {
 	for i, opt := range d.Options {
 		i := i
 
-		radio := gtk.NewCheckButtonWithLabel(opt)
+		radio := gtk.NewCheckButtonWithLabel(opt.String())
 		radio.ConnectToggled(func() {
 			if radio.Active() {
 				f(i)
