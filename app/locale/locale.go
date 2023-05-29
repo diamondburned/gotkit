@@ -5,30 +5,47 @@ import (
 	"io/fs"
 
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
-	"github.com/diamondburned/gotkit/po"
 	"github.com/leonelquinteros/gotext"
 
 	mergedfs "github.com/yalue/merged_fs"
 )
 
 var current = gotext.NewLocale("", "C")
+var localeDomains = map[string]fs.FS{}
+
+// RegisterLocaleDomain registers a locale domain. This is used to load
+// translations from a different domain.
+func RegisterLocaleDomain(domain string, fs fs.FS) {
+	if domain == "default" {
+		panic("domain `default' cannot be registered, use LoadLocale instead")
+	}
+	if _, ok := localeDomains[domain]; ok {
+		panic("domain " + domain + " already registered")
+	}
+	localeDomains[domain] = fs
+}
 
 // LoadLocale loads the locale from the given filesystem. It will try to find
 // the best match for the current locale.
-func LoadLocale(localeFSes ...fs.FS) {
-	localeFSes = append(localeFSes, po.FS)
+func LoadLocale(defaultLocaleDomain fs.FS) {
+	if _, ok := localeDomains["default"]; ok {
+		panic("domain `default' already registered (LoadLocale called twice?)")
+	}
+	localeDomains["default"] = defaultLocaleDomain
+
+	localeFSes := make([]fs.FS, 0, len(localeDomains))
+	for _, fs := range localeDomains {
+		localeFSes = append(localeFSes, fs)
+	}
+
 	localeFS := mergedfs.MergeMultiple(localeFSes...)
 
 	// TODO: allow option to scan $XDG_DATA_DIRS/locale. For now, we'll embed
 	// the locale files.
-	locale := "en_US"
+	var locale string
 
 	// Try to find best match.
 	for _, lang := range glib.GetLanguageNames() {
-		// Sometimes, the locale is in the form of "en_US.UTF-8". We'll try to
-		// cut it down to "en_US" and see if it exists.
-		lang = gotext.SimplifiedLocale(lang)
-
 		if _, err := fs.Stat(localeFS, lang); err == nil {
 			locale = lang
 			break
@@ -37,7 +54,14 @@ func LoadLocale(localeFSes ...fs.FS) {
 		// Otherwise, continue. GTK will cut it down to "en" for us.
 	}
 
+	if locale == "" {
+		return
+	}
+
 	current = gotext.NewLocaleFS(locale, localeFS)
+	for domain := range localeDomains {
+		current.AddDomain(domain)
+	}
 }
 
 // LoadCustomLocale loads the locale from the given filesystem.

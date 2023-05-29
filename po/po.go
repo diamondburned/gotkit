@@ -1,6 +1,14 @@
 package po
 
-import "embed"
+import (
+	"embed"
+
+	"github.com/diamondburned/gotkit/app/locale"
+)
 
 //go:embed *
-var FS embed.FS
+var po embed.FS
+
+func init() {
+	locale.RegisterLocaleDomain("gotkit", po)
+}
