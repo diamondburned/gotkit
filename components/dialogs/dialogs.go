@@ -7,7 +7,6 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/app"
 	"github.com/diamondburned/gotkit/app/locale"
-	"golang.org/x/text/message"
 )
 
 // Dialog provides a dialog with a headerbar.
@@ -19,9 +18,8 @@ type Dialog struct {
 }
 
 // NewLocalize creates a new dialog using message references as button labels.
-func NewLocalize(ctx context.Context, cancel, ok message.Reference) *Dialog {
-	p := locale.SFunc(ctx)
-	return New(ctx, p(cancel), p(ok))
+func NewLocalize(ctx context.Context, cancel, ok locale.Localized) *Dialog {
+	return New(ctx, cancel.String(), ok.String())
 }
 
 // New creates a new dialog.

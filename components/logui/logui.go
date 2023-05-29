@@ -107,7 +107,7 @@ func NewViewer(ctx context.Context, buffer *Buffer) *Viewer {
 	v.Window = app.FromContext(ctx).NewWindow()
 	v.AddCSSClass("logui-viewer")
 	v.SetChild(scroll)
-	v.SetTitle(locale.S(ctx, "Logs"))
+	v.SetTitle(locale.Get("Logs"))
 	v.SetDefaultSize(500, 400)
 
 	esc := gtk.NewEventControllerKey()

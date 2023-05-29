@@ -13,7 +13,6 @@ import (
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/app/locale"
-	"golang.org/x/text/message"
 )
 
 // ErrInvalidAnyType is returned by a preference property if it has the wrong
@@ -109,9 +108,9 @@ type Int struct {
 
 // IntMeta wraps PropMeta for Int.
 type IntMeta struct {
-	Name        message.Reference
-	Section     message.Reference
-	Description message.Reference
+	Name        locale.Localized
+	Section     locale.Localized
+	Description locale.Localized
 	Min         int
 	Max         int
 	Slider      bool
@@ -195,10 +194,10 @@ func (i *Int) WidgetIsLarge() bool { return i.Slider }
 
 // StringMeta is the metadata of a string.
 type StringMeta struct {
-	Name        message.Reference
-	Section     message.Reference
-	Description message.Reference
-	Placeholder message.Reference
+	Name        locale.Localized
+	Section     locale.Localized
+	Description locale.Localized
+	Placeholder locale.Localized
 	Validate    func(string) error
 	Multiline   bool
 }
@@ -284,7 +283,7 @@ func (s *String) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
 	entry.AddCSSClass("prefui-prop")
 	entry.AddCSSClass("prefui-prop-string")
 	entry.SetWidthChars(10)
-	entry.SetPlaceholderText(locale.S(ctx, s.Placeholder))
+	entry.SetPlaceholderText(s.Placeholder.String())
 	entry.ConnectChanged(func() {
 		setEntryIcon(entry, "object-select", "")
 	})

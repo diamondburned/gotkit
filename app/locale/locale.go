@@ -1,78 +1,68 @@
 package locale
 
 import (
-	"context"
+	"fmt"
+	"io/fs"
 	"strings"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
-	"golang.org/x/text/language"
-	"golang.org/x/text/message"
+	"github.com/diamondburned/gotkit/po"
+	"github.com/leonelquinteros/gotext"
+
+	mergedfs "github.com/yalue/merged_fs"
 )
 
-type ctxKey uint
+var current = gotext.NewLocale("", "C")
 
-const (
-	printerKey ctxKey = iota
-)
+// LoadLocale loads the locale from the given filesystem. It will try to find
+// the best match for the current locale.
+func LoadLocale(localeFSes ...fs.FS) {
+	localeFSes = append(localeFSes, po.FS)
+	localeFS := mergedfs.MergeMultiple(localeFSes...)
 
-// NewLocalPrinter creates a new printer from the given options, with the
-// language tags taken from the system's locales using GLib's API.
-func NewLocalPrinter(opts ...message.Option) *message.Printer {
-	var langs []language.Tag
+	// TODO: allow option to scan $XDG_DATA_DIRS/locale. For now, we'll embed
+	// the locale files.
+	locale := "en_US"
 
+	// Try to find best match.
 	for _, lang := range glib.GetLanguageNames() {
-		if lang == "C" {
-			continue
+		// Sometimes, the locale is in the form of "en_US.UTF-8". We'll try to
+		// cut it down to "en_US" and see if it exists.
+		lang = gotext.SimplifiedLocale(lang)
+
+		if _, err := fs.Stat(localeFS, lang); err == nil {
+			locale = lang
+			break
 		}
 
-		icuLocale := strings.SplitN(lang, ".", 2)[0]
-
-		t, err := language.Parse(icuLocale)
-		if err == nil {
-			langs = append(langs, t)
-		}
+		// Otherwise, continue. GTK will cut it down to "en" for us.
 	}
 
-	// English fallback.
-	if len(langs) < 1 {
-		langs = append(langs, language.English)
-	}
-
-	return message.NewPrinter(langs[0], opts...)
+	current = gotext.NewLocaleFS(locale, localeFS)
 }
 
-// WithPrinter inserts the given printer into a new context and  returns it.
-func WithPrinter(ctx context.Context, p *message.Printer) context.Context {
-	return context.WithValue(ctx, printerKey, p)
+// LoadCustomLocale loads the locale from the given filesystem.
+func LoadCustomLocale(locale string, localeFS fs.FS) {
+	current = gotext.NewLocaleFS(locale, localeFS)
 }
 
-// S returns the translated string from the given reference.
-func S(ctx context.Context, a message.Reference) string {
-	return FromContext(ctx).Sprint(a)
+// Get returns the translated string from the given reference.
+func Get(str string, vars ...any) string {
+	return current.Get(str, vars...)
 }
 
-// SFunc is a helper function that wraps the given context to format multiple
-// strings in a shorter syntax.
-func SFunc(ctx context.Context) func(a message.Reference) string {
-	p := FromContext(ctx)
-	return func(a message.Reference) string { return p.Sprint(a) }
+// Sprintf is an alias for Get.
+func Sprintf(str string, vars ...any) string {
+	return current.Get(str, vars...)
 }
 
-// Sprint calls ctx's message printer's Sprint.
-func Sprint(ctx context.Context, a ...message.Reference) string {
-	vs := make([]interface{}, len(a))
-	for i, v := range a {
-		vs[i] = v
-	}
-	return FromContext(ctx).Sprint(vs...)
+// Current returns the current locale.
+func Current() *gotext.Locale {
+	return current
 }
 
-// Sprintf calls ctx's message printer's Sprintf.
-func Sprintf(ctx context.Context, k message.Reference, a ...interface{}) string {
-	return FromContext(ctx).Sprintf(k, a...)
-}
-
+/* TODO: implement Plural
 // Plural formats the string in plural form.
 func Plural(ctx context.Context, one, many message.Reference, n int) string {
 	// I don't know how x/text/plural works.
@@ -82,25 +72,7 @@ func Plural(ctx context.Context, one, many message.Reference, n int) string {
 	}
 	return p.Sprintf(many, n)
 }
-
-// Printer is a message printer.
-type Printer = message.Printer
-
-// NullPrinter is the default printer that returns the default (probably)
-// English texts. Use it as a fallback.
-var NullPrinter = message.NewPrinter(
-	language.Und,
-	message.Catalog(message.DefaultCatalog),
-)
-
-// FromContext returns the printer inside the context or nil.
-func FromContext(ctx context.Context) *Printer {
-	p, ok := ctx.Value(printerKey).(*Printer)
-	if ok {
-		return p
-	}
-	return NullPrinter
-}
+*/
 
 // doubleSpaceCollider is used for some formatted timestamps to get rid of
 // padding spaces.
@@ -109,11 +81,9 @@ var doubleSpaceCollider = strings.NewReplacer("  ", " ")
 // Time formats the given timestamp as a locale-compatible timestamp.
 func Time(t time.Time, long bool) string {
 	glibTime := glib.NewDateTimeFromGo(t.Local())
-
 	if long {
 		return doubleSpaceCollider.Replace(glibTime.Format("%c"))
 	}
-
 	return glibTime.Format("%X")
 }
 
@@ -125,33 +95,46 @@ const (
 
 type truncator struct {
 	d time.Duration
-	s message.Reference
+	s Localized
 }
 
 var longTruncators = []truncator{
 	{d: 1 * Day, s: "Today at %X"},
 	{d: 2 * Day, s: "Yesterday at %X"},
 	{d: Week, s: "%A at %X"},
-	{d: -1, s: "%X %x"},
+	{s: "%X %x"},
 }
 
 // TimeAgo formats a long string that expresses the relative time difference
 // from now until t.
-func TimeAgo(ctx context.Context, t time.Time) string {
+func TimeAgo(t time.Time) string {
 	t = t.Local()
 
 	trunc := t
 	now := time.Now().Local()
 
-	for _, truncator := range longTruncators {
+	for i, truncator := range longTruncators {
 		trunc = trunc.Truncate(truncator.d)
 		now = now.Truncate(truncator.d)
 
-		if trunc.Equal(now) || truncator.d == -1 {
+		if trunc.Equal(now) || i == len(longTruncators)-1 {
 			glibTime := glib.NewDateTimeFromGo(t)
-			return glibTime.Format(S(ctx, truncator.s))
+			return glibTime.Format(truncator.s.String())
 		}
 	}
 
-	return ""
+	panic("unreachable")
+}
+
+// Localized is a string that can be localized.
+// Its String() method will return the localized string.
+type Localized string
+
+// String implements fmt.Stringer. It returns the localized string.
+func (l Localized) String() string {
+	return Get(string(l))
+}
+
+func (l Localized) GoString() string {
+	return fmt.Sprintf("locale.Localized(%q)", string(l))
 }

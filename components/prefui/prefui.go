@@ -140,7 +140,7 @@ func newDialog(ctx context.Context) *Dialog {
 	scroll.SetChild(d.box)
 
 	searchEntry := gtk.NewSearchEntry()
-	searchEntry.SetObjectProperty("placeholder-text", locale.S(ctx, "Search Preferences..."))
+	searchEntry.SetObjectProperty("placeholder-text", locale.Get("Search Preferences..."))
 	searchEntry.ConnectSearchChanged(func() { d.Search(searchEntry.Text()) })
 
 	d.search = gtk.NewSearchBar()
@@ -161,7 +161,7 @@ func newDialog(ctx context.Context) *Dialog {
 	outerBox.Append(scroll)
 
 	d.Dialog = gtk.NewDialogWithFlags(
-		locale.S(ctx, "Preferences"), app.GTKWindowFromContext(ctx),
+		locale.Get("Preferences"), app.GTKWindowFromContext(ctx),
 		gtk.DialogDestroyWithParent|gtk.DialogUseHeaderBar,
 	)
 	d.Dialog.AddCSSClass("prefui-dialog")

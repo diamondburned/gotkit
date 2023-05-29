@@ -1,0 +1,8 @@
+msgid "Today at %X"
+msgstr "Hôm nay lúc %X"
+
+msgid "Yesterday at %X"
+msgstr "Hôm qua lúc %X"
+
+msgid "%A at %X"
+msgstr "%A lúc %X"

@@ -18,7 +18,6 @@ import (
 	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/utils/config"
 	"github.com/pkg/errors"
-	"golang.org/x/text/message"
 )
 
 // propRegistry is the global registry map.
@@ -226,7 +225,7 @@ type LocalizedProp struct {
 
 // ListProperties enumerates all known global properties into a map of
 func ListProperties(ctx context.Context) []ListedSection {
-	m := map[message.Reference][]Prop{}
+	m := map[locale.Localized][]Prop{}
 
 	for _, prop := range propRegistry {
 		if hidden[prop] {
@@ -237,13 +236,8 @@ func ListProperties(ctx context.Context) []ListedSection {
 		m[meta.Section] = append(m[meta.Section], prop)
 	}
 
-	localize := func(ref message.Reference) string {
-		if ref == nil {
-			return ""
-		}
-
-		str := locale.S(ctx, ref)
-		return docToText(str)
+	localize := func(str locale.Localized) string {
+		return docToText(str.String())
 	}
 
 	sections := make([]ListedSection, 0, len(m))
