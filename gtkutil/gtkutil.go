@@ -2,7 +2,9 @@ package gtkutil
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"reflect"
 	"sync"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -450,4 +452,63 @@ func RecursiveUnfuck(w gtk.Widgetter) {
 			child = gtk.BaseWidget(child).NextSibling()
 		}
 	}
+}
+
+// MustUnmarshalBuilder calls UnmarshalBuilder and panics on any error.
+func MustUnmarshalBuilder(v any, builder *gtk.Builder) {
+	if err := UnmarshalBuilder(v, builder); err != nil {
+		panic(err)
+	}
+}
+
+// UnmarshalBuilder unmarshals the given gtk.Builder instance into the given
+// struct pointer dst. It uses the `name` struct tag to query for objects in the
+// builder. A missing object is an error. An object with mismatching type is an
+// error.
+//
+// Below is a minimal example of this function:
+//
+//    var built struct {
+//        Window *gtk.Window `name:"window"`
+//        Close  *gtk.Button `name:"close"`
+//    }
+//
+//    builder := gtk.NewBuilderFromString(windowUI, -1)
+//    err := UnmarshalBuilder(&built, builder)
+//
+func UnmarshalBuilder(dst any, builder *gtk.Builder) error {
+	rt := reflect.TypeOf(dst)
+	if rt.Kind() != reflect.Ptr {
+		return fmt.Errorf("unmarshalBuilder: value must be a pointer")
+	}
+
+	rv := reflect.ValueOf(dst).Elem()
+	rt = rv.Type()
+	if rt.Kind() != reflect.Struct {
+		return fmt.Errorf("unmarshalBuilder: value must be a struct")
+	}
+
+	for i := 0; i < rt.NumField(); i++ {
+		name := rt.Field(i).Tag.Get("name")
+		if name == "" {
+			continue
+		}
+
+		object := builder.GetObject(name)
+		if object == nil {
+			return fmt.Errorf("unmarshalBuilder: object named %s not found", name)
+		}
+
+		fieldType := rt.Field(i).Type
+		fieldValue := object.WalkCast(func(obj glib.Objector) bool {
+			return fieldType.AssignableTo(reflect.TypeOf(obj))
+		})
+		if fieldValue == nil {
+			return fmt.Errorf("unmarshalBuilder: object named %s (%s) is not of type %s", name, object.Type(), fieldType)
+		}
+
+		rv.Field(i).Set(reflect.ValueOf(fieldValue))
+	}
+
+	return nil
 }
