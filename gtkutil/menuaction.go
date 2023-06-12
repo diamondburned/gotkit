@@ -193,6 +193,17 @@ func BindPopoverMenu(w gtk.Widgetter, pos gtk.PositionType, pairs [][2]string) {
 	BindRightClick(w, func() { ShowPopoverMenu(w, pos, pairs) })
 }
 
+// BindPopoverMenuAtMouse binds the given widget to a popover menu to be
+// displayed on right-clicking, but at the mouse position.
+func BindPopoverMenuAtMouse(w gtk.Widgetter, pos gtk.PositionType, pairs [][2]string) {
+	BindRightClickAt(w, func(x, y float64) {
+		at := gdk.NewRectangle(int(x), int(y), 0, 0)
+		popover := NewPopoverMenu(w, pos, pairs)
+		popover.SetPointingTo(&at)
+		PopupFinally(popover)
+	})
+}
+
 // ShowPopoverMenu is like ShowPopoverMenuCustom but uses a regular string pair
 // list.
 func ShowPopoverMenu(w gtk.Widgetter, pos gtk.PositionType, pairs [][2]string) *gtk.PopoverMenu {
