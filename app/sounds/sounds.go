@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
-	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/app"
 	"github.com/pkg/errors"
@@ -55,37 +55,6 @@ func play(app *app.Application, id string) {
 
 	soundsLastPlayed.Store(id, now)
 
-	name := id
-	if filepath.Ext(name) == "" {
-		name += ".opus"
-	}
-
-	// app := app.FromContext(ctx)
-	dst := app.CachePath("sounds", name)
-
-	var fileExists bool
-
-	if b, ok := fileExistsCache.Load(dst); ok && b.(bool) {
-		fileExists = true
-	} else {
-		_, err := os.Stat(dst)
-		fileExists = err == nil
-		fileExistsCache.Store(id, fileExists)
-	}
-
-	if fileExists {
-		glib.IdleAdd(func() {
-			media := gtk.NewMediaFileForFilename(dst)
-			media.NotifyProperty("error", func() {
-				fileExistsCache.Delete(id)
-				playEmbedError(id, media.Error())
-			})
-			// Not sure if this leaks.
-			media.Play()
-		})
-		return
-	}
-
 	canberra := exec.Command("canberra-gtk-play", "--id", id)
 	if err := canberra.Run(); err == nil {
 		return
@@ -93,11 +62,41 @@ func play(app *app.Application, id string) {
 		log.Println("canberra error:", err)
 	}
 
-	if err := copyToFS(dst, name); err != nil {
-		log.Printf("cannot copy sound %q: %v", id, err)
-		glib.IdleAdd(beep)
-		return
+	name := id
+	if filepath.Ext(name) == "" {
+		name += ".opus"
 	}
+
+	dst := app.CachePath("sounds", name)
+
+	var fileExists bool
+	if b, ok := fileExistsCache.Load(dst); ok && b.(bool) {
+		fileExists = true
+	} else {
+		_, err := os.Stat(dst)
+		if err != nil {
+			if err := copyToFS(dst, name); err != nil {
+				log.Printf("cannot copy sound %q: %v", id, err)
+				glib.IdleAdd(beep)
+				return
+			}
+		}
+		fileExists = true
+		fileExistsCache.Store(id, fileExists)
+	}
+
+	glib.IdleAdd(func() {
+		media := gtk.NewMediaFileForFilename(dst)
+
+		mediaWeak := glib.NewWeakRef(media)
+		media.NotifyProperty("error", func() {
+			media := mediaWeak.Get()
+			fileExistsCache.Delete(id)
+			playEmbedError(id, media.Error())
+		})
+
+		media.Play()
+	})
 }
 
 func playEmbedError(name string, err error) {
