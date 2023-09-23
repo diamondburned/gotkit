@@ -205,20 +205,7 @@ func (b *baseImage) startAnimation() {
 	h *= scale
 
 	useIter := func(iter *gdkpixbuf.PixbufAnimationIter) {
-		// Got new frame.
-		p := iter.Pixbuf()
-
-		pw := p.Width()
-		ph := p.Height()
-
-		// See scaler.go's maxScale.
-		if (w != 0 && h != 0) && (w < pw && pw < animMaxW) && (h < ph && ph < animMaxH) && scale <= maxScale {
-			// Scaling doesn't actually use that much more CPU than not, but it
-			// depends on how big the image is.
-			p = p.ScaleSimple(w, h, gdkpixbuf.InterpTiles)
-		}
-
-		setter.SetFromPixbuf(p)
+		setter.SetFromPixbuf(iter.Pixbuf())
 	}
 	// Kickstart the animation.
 	useIter(iter)

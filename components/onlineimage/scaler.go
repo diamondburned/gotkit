@@ -9,29 +9,22 @@ import (
 	"github.com/diamondburned/gotkit/gtkutil"
 )
 
-// maxScale is the maximum supported scale that we can supply a properly scaled
-// pixbuf for.
-const maxScale = 3
-
-// 1x, 2x and 3x
-type pixbufScales [maxScale]*gdkpixbuf.Pixbuf
-
 type pixbufScaler struct {
 	parent *baseImage
 	// parentSz keeps track of the parent widget's sizes in case it has been
 	// changed, which would force us to invalidate all scaled pixbufs.
 	parentSz [2]int
-	// scales stores scaled pixbufs.
-	scales pixbufScales
 	// src is the source pixbuf.
 	src *gdkpixbuf.Pixbuf
+	// src1x is the source pixbuf at 1x scale.
+	src1x *gdkpixbuf.Pixbuf
 }
 
 // SetFromPixbuf invalidates and sets the internal scaler's pixbuf. The
 // SetFromPixbuf call might be bubbled up to the parent widget.
 func (p *pixbufScaler) SetFromPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
 	p.src = pixbuf
-	p.scales = pixbufScales{}
+	p.src1x = nil
 	p.invalidate()
 }
 
@@ -61,14 +54,14 @@ func (p *pixbufScaler) init(parent *baseImage) {
 		p.Invalidate()
 	})
 
-	// Call Invalidate for 2 ticks, which seems to be enough to trick GTK into
+	// Call Invalidate for 5 ticks, which seems to be enough to trick GTK into
 	// giving us the correct scale factor. The actual fix would probably involve
 	// connecting to various different signals, but this is good enough for now.
 	var ticks int
 	base.AddTickCallback(func(gtk.Widgetter, gdk.FrameClocker) bool {
 		p.Invalidate()
 		ticks++
-		return ticks < 2
+		return ticks < 5 && p.parent.scale() != gtkutil.ScaleFactor()
 	})
 }
 
@@ -102,7 +95,7 @@ func (p *pixbufScaler) invalidate() {
 
 	if p.parentSz != [2]int{dstW, dstH} {
 		// Size changed, so invalidate all known pixbufs.
-		p.scales = pixbufScales{}
+		p.src1x = nil
 		p.parentSz = [2]int{dstW, dstH}
 	}
 
@@ -118,28 +111,14 @@ func (p *pixbufScaler) invalidate() {
 		return
 	}
 
-	if scale > maxScale {
-		// We don't have these scales, so just use the source. User gets jagged
-		// image, but on a 3x HiDPI display, it doesn't matter, unless the user
-		// has both 3x and 1x displays.
-		p.setParentPixbuf(p.src)
-		return
-	}
-
-	pixbuf := p.scales[scale-1]
-
-	if pixbuf == nil {
-		if dstW == srcW && dstH == srcH {
-			// Scaling is the same either way, so just use this for the current
-			// scaling. This saves memory on most machines with only 1 scaling.
-			pixbuf = p.src
-		} else {
+	pixbuf := p.src
+	if scale == 1 && dstW != srcW && dstH != srcH {
+		if p.src1x == nil {
 			// InterpTiles is apparently as good as bilinear when downscaling,
 			// which is what we want.
-			pixbuf = p.src.ScaleSimple(dstW, dstH, gdkpixbuf.InterpTiles)
+			p.src1x = p.src.ScaleSimple(dstW, dstH, gdkpixbuf.InterpBilinear)
 		}
-
-		p.scales[scale-1] = pixbuf
+		pixbuf = p.src1x
 	}
 
 	p.setParentPixbuf(pixbuf)
