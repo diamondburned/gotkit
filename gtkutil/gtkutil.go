@@ -338,7 +338,7 @@ func Async(ctx context.Context, asyncFn func() func()) {
 }
 
 var (
-	scaleFactor      int
+	scaleFactor      = 1
 	scaleFactorMutex sync.RWMutex
 	initScaleOnce    sync.Once
 )
@@ -350,10 +350,6 @@ func ScaleFactor() int {
 
 	scaleFactorMutex.RLock()
 	defer scaleFactorMutex.RUnlock()
-
-	if scaleFactor == 0 {
-		panic("uninitialized scaleFactor")
-	}
 
 	return scaleFactor
 }
@@ -385,41 +381,26 @@ func initScale() {
 
 func bindDisplayManager(dmanager *gdk.DisplayManager) {
 	for _, display := range dmanager.ListDisplays() {
-		bindDisplay(display)
+		list := display.Monitors()
+
+		listRef := coreglib.NewWeakRef(list)
+		list.ConnectItemsChanged(func(_, _, _ uint) {
+			list := listRef.Get()
+			updateScale(list)
+		})
+
+		updateScale(list)
 	}
-}
-
-func bindDisplay(display *gdk.Display) {
-	dname := display.Name()
-
-	_, ok := boundDisplays[dname]
-	if ok {
-		return
-	}
-
-	boundDisplays[dname] = struct{}{}
-	display.ConnectClosed(func(bool) { delete(boundDisplays, dname) })
-
-	list := display.Monitors()
-	list.ConnectItemsChanged(func(_, _, _ uint) { updateScale(list) })
-	updateScale(list)
 }
 
 func updateScale(monitors gio.ListModeller) {
-	maxScale := 0
-
+	maxScale := 1
 	eachMonitor(monitors, func(monitor *gdk.Monitor) {
 		if scale := monitor.ScaleFactor(); maxScale < scale {
 			maxScale = scale
 		}
 	})
-
-	scaleFactorMutex.Lock()
-	defer scaleFactorMutex.Unlock()
-
-	if scaleFactor < maxScale {
-		scaleFactor = maxScale
-	}
+	SetScaleFactor(maxScale)
 }
 
 func eachMonitor(list gio.ListModeller, f func(*gdk.Monitor)) {
@@ -468,14 +449,13 @@ func MustUnmarshalBuilder(v any, builder *gtk.Builder) {
 //
 // Below is a minimal example of this function:
 //
-//    var built struct {
-//        Window *gtk.Window `name:"window"`
-//        Close  *gtk.Button `name:"close"`
-//    }
+//	var built struct {
+//	    Window *gtk.Window `name:"window"`
+//	    Close  *gtk.Button `name:"close"`
+//	}
 //
-//    builder := gtk.NewBuilderFromString(windowUI, -1)
-//    err := UnmarshalBuilder(&built, builder)
-//
+//	builder := gtk.NewBuilderFromString(windowUI, -1)
+//	err := UnmarshalBuilder(&built, builder)
 func UnmarshalBuilder(dst any, builder *gtk.Builder) error {
 	rt := reflect.TypeOf(dst)
 	if rt.Kind() != reflect.Ptr {
