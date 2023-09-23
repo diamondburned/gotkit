@@ -199,11 +199,8 @@ func (b *baseImage) startAnimation() {
 	iter := b.animation.pixbuf.Iter(nil)
 	setter := b.imageParent.setter
 
-	base := gtk.BaseWidget(b.parent)
-
+	scale := b.scale()
 	w, h := b.sizeAllocated()
-
-	scale := base.ScaleFactor()
 	w *= scale
 	h *= scale
 

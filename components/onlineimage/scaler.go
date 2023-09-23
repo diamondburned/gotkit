@@ -3,6 +3,7 @@ package onlineimage
 import (
 	"log"
 
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil"
@@ -58,6 +59,16 @@ func (p *pixbufScaler) init(parent *baseImage) {
 	base.NotifyProperty("scale-factor", func() {
 		gtkutil.SetScaleFactor(parent.scale())
 		p.Invalidate()
+	})
+
+	// Call Invalidate for 2 ticks, which seems to be enough to trick GTK into
+	// giving us the correct scale factor. The actual fix would probably involve
+	// connecting to various different signals, but this is good enough for now.
+	var ticks int
+	base.AddTickCallback(func(gtk.Widgetter, gdk.FrameClocker) bool {
+		p.Invalidate()
+		ticks++
+		return ticks < 2
 	})
 }
 
