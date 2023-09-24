@@ -347,10 +347,12 @@ var (
 // thread-safe.
 func ScaleFactor() int {
 	initScale()
+	return readScaleFactor()
+}
 
+func readScaleFactor() int {
 	scaleFactorMutex.RLock()
 	defer scaleFactorMutex.RUnlock()
-
 	return scaleFactor
 }
 
@@ -358,7 +360,8 @@ func ScaleFactor() int {
 // of GDK fails to update the scale factor in time.
 func SetScaleFactor(maxScale int) {
 	// Fast RLock path
-	if maxScale < ScaleFactor() {
+	// be careful not to use initScaleOnce.Do here, since it will deadlock
+	if maxScale < readScaleFactor() {
 		return
 	}
 
