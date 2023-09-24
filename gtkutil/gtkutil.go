@@ -357,6 +357,11 @@ func ScaleFactor() int {
 // SetScaleFactor sets the global maximum scale factor. This function is useful
 // of GDK fails to update the scale factor in time.
 func SetScaleFactor(maxScale int) {
+	// Fast RLock path
+	if maxScale < ScaleFactor() {
+		return
+	}
+
 	scaleFactorMutex.Lock()
 	defer scaleFactorMutex.Unlock()
 
@@ -381,21 +386,19 @@ func initScale() {
 
 func bindDisplayManager(dmanager *gdk.DisplayManager) {
 	for _, display := range dmanager.ListDisplays() {
-		list := display.Monitors()
+		updateScale(display.Monitors())
 
-		listRef := coreglib.NewWeakRef(list)
-		list.ConnectItemsChanged(func(_, _, _ uint) {
-			list := listRef.Get()
-			updateScale(list)
+		displayRef := coreglib.NewWeakRef(display)
+		display.Monitors().ConnectItemsChanged(func(_, _, _ uint) {
+			display := displayRef.Get()
+			updateScale(display.Monitors())
 		})
-
-		updateScale(list)
 	}
 }
 
 func updateScale(monitors gio.ListModeller) {
 	maxScale := 1
-	eachMonitor(monitors, func(monitor *gdk.Monitor) {
+	EachList(monitors, func(monitor *gdk.Monitor) {
 		if scale := monitor.ScaleFactor(); maxScale < scale {
 			maxScale = scale
 		}
@@ -403,13 +406,12 @@ func updateScale(monitors gio.ListModeller) {
 	SetScaleFactor(maxScale)
 }
 
-func eachMonitor(list gio.ListModeller, f func(*gdk.Monitor)) {
+// EachList calls f for each item in the list.
+func EachList[T glib.Objector](list gio.ListModeller, f func(T)) {
 	var i uint
 	obj := list.Item(0)
-
 	for obj != nil {
-		f(obj.Cast().(*gdk.Monitor))
-
+		f(obj.Cast().(T))
 		i++
 		obj = list.Item(i)
 	}
