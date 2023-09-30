@@ -165,7 +165,8 @@ func newDialog(ctx context.Context) *Dialog {
 		gtk.DialogDestroyWithParent|gtk.DialogUseHeaderBar,
 	)
 	d.Dialog.AddCSSClass("prefui-dialog")
-	d.Dialog.SetModal(false)
+	d.Dialog.SetTransientFor(app.GTKWindowFromContext(ctx))
+	d.Dialog.SetModal(true)
 	d.Dialog.SetDefaultSize(400, 500)
 	d.Dialog.SetChild(outerBox)
 
