@@ -1,13 +1,15 @@
 { pkgs ? import <nixpkgs> {} }:
 
-let gotk4-nix = pkgs.fetchFromGitHub {
-		owner = "diamondburned";
-		repo = "gotk4-nix";
-		rev = "b186ac5419c22f4b75b1bdc35ef4fd9349c6b65e";
-		sha256 = "1pfx0p4w56d7pa1l9ipqfq52znfl7slc2wbjfqddq1jv1fp9z43q";
+let
+	gotk4-nix = pkgs.fetchFromGitHub {
+		owner  = "diamondburned";
+		repo   = "gotk4-nix";
+		rev    = "ad91dabf706946c4380d0a105f0937e4e8ffd75f";
+		sha256 = "0rkw9k98qy7ifwypkh2fqhdn7y2qphy2f8xjisj0cyp5pjja62im";
 	};
+in
 
-in import "${gotk4-nix}/shell.nix" {
+import "${gotk4-nix}/shell.nix" {
 	base = {
 		pname = "gotkit";
 		version = "dev";
