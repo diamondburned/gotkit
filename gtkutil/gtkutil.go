@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"sync"
+	"sync/atomic"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
@@ -338,70 +338,61 @@ func Async(ctx context.Context, asyncFn func() func()) {
 }
 
 var (
-	scaleFactor      = 1
-	scaleFactorMutex sync.RWMutex
-	initScaleOnce    sync.Once
+	scaleFactor      atomic.Int32
+	scaleInitialized = false
 )
 
 // ScaleFactor returns the largest scale factor from all the displays. It is
 // thread-safe.
 func ScaleFactor() int {
 	initScale()
-	return readScaleFactor()
-}
-
-func readScaleFactor() int {
-	scaleFactorMutex.RLock()
-	defer scaleFactorMutex.RUnlock()
-	return scaleFactor
+	return int(scaleFactor.Load())
 }
 
 // SetScaleFactor sets the global maximum scale factor. This function is useful
 // of GDK fails to update the scale factor in time.
 func SetScaleFactor(maxScale int) {
+retry:
+	scale := scaleFactor.Load()
 	// Fast RLock path
 	// be careful not to use initScaleOnce.Do here, since it will deadlock
-	if maxScale < readScaleFactor() {
+	if maxScale < int(scale) {
 		return
 	}
 
-	scaleFactorMutex.Lock()
-	defer scaleFactorMutex.Unlock()
-
-	if scaleFactor < maxScale {
-		scaleFactor = maxScale
+	if !scaleFactor.CompareAndSwap(scale, int32(maxScale)) {
+		// someone else updated the scale factor, retry
+		goto retry
 	}
 }
 
-var boundDisplays = make(map[string]struct{}, 2)
-
 func initScale() {
-	initScaleOnce.Do(func() {
-		InvokeMain(func() {
+	InvokeMain(func() {
+		if !scaleInitialized {
+			scaleInitialized = true
+
 			dmanager := gdk.DisplayManagerGet()
-			dmanager.ConnectDisplayOpened(func(*gdk.Display) {
-				bindDisplayManager(dmanager)
+			dmanager.ConnectDisplayOpened(func(display *gdk.Display) {
+				bindDisplay(display)
 			})
-			bindDisplayManager(dmanager)
-		})
+			for _, display := range dmanager.ListDisplays() {
+				bindDisplay(display)
+			}
+
+			updateScale()
+		}
 	})
 }
 
-func bindDisplayManager(dmanager *gdk.DisplayManager) {
-	for _, display := range dmanager.ListDisplays() {
-		updateScale(display.Monitors())
-
-		displayRef := coreglib.NewWeakRef(display)
-		display.Monitors().ConnectItemsChanged(func(_, _, _ uint) {
-			display := displayRef.Get()
-			updateScale(display.Monitors())
-		})
-	}
+func bindDisplay(display *gdk.Display) {
+	monitors := display.Monitors()
+	monitors.ConnectItemsChanged(func(_, _, _ uint) { updateScale() })
 }
 
-func updateScale(monitors gio.ListModeller) {
+func updateScale() {
+	display := gdk.DisplayGetDefault()
 	maxScale := 1
-	EachList(monitors, func(monitor *gdk.Monitor) {
+	EachList(display.Monitors(), func(monitor *gdk.Monitor) {
 		if scale := monitor.ScaleFactor(); maxScale < scale {
 			maxScale = scale
 		}
