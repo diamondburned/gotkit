@@ -12,6 +12,8 @@ import (
 
 // State implements an easy API for storing persistent state that components can
 // use.
+//
+// Deprecated: prefer StateKey, which is a type-safe wrapper around this.
 type State struct {
 	path  string
 	store config.ConfigStore
