@@ -65,6 +65,11 @@ func (a *Avatar) SetFromURL(url string) {
 	a.base.SetFromURL(url)
 }
 
+// Clear clears the Avatar's image.
+func (a *Avatar) Clear() {
+	a.SetFromURL("")
+}
+
 // SetSizeRequest sets the avatar size.
 func (a *Avatar) SetSizeRequest(size int) {
 	a.Avatar.SetSizeRequest(size)
@@ -116,6 +121,11 @@ func (i *Image) SetFromURL(url string) {
 	i.base.SetFromURL(url)
 }
 
+// Clear clears the image.
+func (i *Image) Clear() {
+	i.base.Clear()
+}
+
 // SetSizeRequest sets the minimum size of a widget.
 func (i *Image) SetSizeRequest(w, h int) {
 	i.Image.SetSizeRequest(w, h)
@@ -153,6 +163,11 @@ func NewPicture(ctx context.Context, prov imgutil.Provider) *Picture {
 // SetURL sets the Avatar's URL.
 func (p *Picture) SetURL(url string) {
 	p.base.SetFromURL(url)
+}
+
+// Clear clears the picture.
+func (p *Picture) Clear() {
+	p.base.Clear()
 }
 
 // SetSizeRequest sets the minimum size of a widget.

@@ -88,6 +88,11 @@ func (b *baseImage) SetFromURL(url string) {
 	b.refetch()
 }
 
+func (b *baseImage) Clear() {
+	b.SetFromURL("")
+	b.setter.SetFromPixbuf(nil)
+}
+
 func (b *baseImage) refetch() {
 	b.ok = false
 	b.fetch(b.ctx.Take())
@@ -106,6 +111,10 @@ func (b *baseImage) fetch(ctx context.Context) {
 
 	imgutil.DoProviderURL(ctx, b.prov, url, imgutil.ImageSetter{
 		SetFromPixbuf: func(p *gdkpixbuf.Pixbuf) {
+			if b.url != url {
+				return
+			}
+
 			b.ok = true
 			b.scaler.SetFromPixbuf(p)
 
@@ -114,6 +123,10 @@ func (b *baseImage) fetch(ctx context.Context) {
 			}
 		},
 		SetFromAnimation: func(anim *gdkpixbuf.PixbufAnimation) {
+			if b.url != url {
+				return
+			}
+
 			b.ok = true
 			b.scaler.SetFromPixbuf(anim.StaticImage())
 

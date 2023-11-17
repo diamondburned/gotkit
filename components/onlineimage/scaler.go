@@ -75,7 +75,6 @@ func (p *pixbufScaler) setParentPixbuf(pixbuf *gdkpixbuf.Pixbuf) {
 // widget's Refetch method.
 func (p *pixbufScaler) invalidate() {
 	if p.src == nil {
-		p.setParentPixbuf(nil)
 		return
 	}
 
