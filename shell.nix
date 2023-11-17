@@ -19,4 +19,10 @@ import "${gotk4-nix}/shell.nix" {
 		# staticcheck takes forever to build gotk4 twice. I'm good.
 		(writeShellScriptBin "staticcheck" "")
 	];
+
+	shellHook = ''
+		# Generate compile_flags.txt with the needed pkg-config flags.
+		readarray -d' ' cflags < <(pkg-config --cflags --libs gtk4)
+		printf "%s\n" "''${cflags[@]}" > compile_flags.txt
+	'';
 }

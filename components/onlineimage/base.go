@@ -56,6 +56,7 @@ type baseImage struct {
 
 	ctx gtkutil.Cancellable
 	url string
+	off bool
 	ok  bool
 }
 
@@ -85,12 +86,14 @@ func (b *baseImage) SetFromURL(url string) {
 	}
 
 	b.url = url
+	b.off = false
 	b.refetch()
 }
 
-func (b *baseImage) Clear() {
-	b.SetFromURL("")
-	b.setter.SetFromPixbuf(nil)
+func (b *baseImage) Disable() {
+	b.url = ""
+	b.off = true
+	b.scaler.SetFromPixbuf(nil)
 }
 
 func (b *baseImage) refetch() {
@@ -99,12 +102,13 @@ func (b *baseImage) refetch() {
 }
 
 func (b *baseImage) fetch(ctx context.Context) {
-	if b.ok || ctx.Err() != nil {
+	if b.off || b.ok || ctx.Err() != nil {
 		return
 	}
 
 	url := b.url
 	if url == "" {
+		b.setter.SetFromPixbuf(nil)
 		b.scaler.SetFromPixbuf(nil)
 		return
 	}

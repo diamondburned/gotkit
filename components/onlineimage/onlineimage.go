@@ -65,9 +65,10 @@ func (a *Avatar) SetFromURL(url string) {
 	a.base.SetFromURL(url)
 }
 
-// Clear clears the Avatar's image.
-func (a *Avatar) Clear() {
-	a.SetFromURL("")
+// Disable disables the online capability of the avatar, and sets the avatar to
+// the default avatar.
+func (a *Avatar) Disable() {
+	a.base.Disable()
 }
 
 // SetSizeRequest sets the avatar size.
@@ -121,9 +122,10 @@ func (i *Image) SetFromURL(url string) {
 	i.base.SetFromURL(url)
 }
 
-// Clear clears the image.
-func (i *Image) Clear() {
-	i.base.Clear()
+// Disable disables the online capability of the image, turning it into a
+// normal gtk.Image. To re-enable it, call SetURL again.
+func (i *Image) Disable() {
+	i.base.Disable()
 }
 
 // SetSizeRequest sets the minimum size of a widget.
@@ -165,9 +167,10 @@ func (p *Picture) SetURL(url string) {
 	p.base.SetFromURL(url)
 }
 
-// Clear clears the picture.
-func (p *Picture) Clear() {
-	p.base.Clear()
+// Disable disables the online capability of the picture, turning it into a
+// normal gtk.Picture. To re-enable it, call SetURL again.
+func (p *Picture) Disable() {
+	p.base.Disable()
 }
 
 // SetSizeRequest sets the minimum size of a widget.
