@@ -145,7 +145,7 @@ func newDialog(ctx context.Context) *Dialog {
 
 	d.search = gtk.NewSearchBar()
 	d.search.SetChild(searchEntry)
-	d.search.ConnectEntry(&searchEntry.Editable)
+	d.search.ConnectEntry(&searchEntry.EditableTextWidget)
 
 	searchButton := gtk.NewToggleButton()
 	searchButton.SetIconName("system-search-symbolic")

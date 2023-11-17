@@ -1,7 +1,7 @@
 github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399 h1:MGJoYuTUukTa+y3XIAvQQmZAOO2JeRTefkdxhsoPfSY=
 github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399/go.mod h1:cLoCdQtpCp/TSJBJTgXe7W2FJNelXrmPv+X7luB6/Qg=
-github.com/diamondburned/gotk4/pkg v0.0.6-0.20230812020241-a8c49098a9dc h1:cocc9PWhkERW7NBxPJ0AajgdMhf5dBUemwwKn6ZNu18=
-github.com/diamondburned/gotk4/pkg v0.0.6-0.20230812020241-a8c49098a9dc/go.mod h1:Jr5xzUuGyLsoMtE9LzE/Lay1gD0ONiFWAmQ0+Z6KLeA=
+github.com/diamondburned/gotk4/pkg v0.0.6-0.20231117083507-eb41da62b149 h1:ePqHNy56Dx6ROgndnNEqDOOmWHK3S6zhdB5hd0J+lRs=
+github.com/diamondburned/gotk4/pkg v0.0.6-0.20231117083507-eb41da62b149/go.mod h1:Jr5xzUuGyLsoMtE9LzE/Lay1gD0ONiFWAmQ0+Z6KLeA=
 github.com/leonelquinteros/gotext v1.5.3-0.20230829162019-37f474cfb069 h1:9ZM/t54vDjI3XRw2+HC2DxrH2Giv/jAyv7+Vq2QgXmg=
 github.com/leonelquinteros/gotext v1.5.3-0.20230829162019-37f474cfb069/go.mod h1:AT4NpQrOmyj1L/+hLja6aR0lk81yYYL4ePnj2kp7d6M=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
