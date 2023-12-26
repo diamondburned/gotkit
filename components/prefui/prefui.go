@@ -82,10 +82,6 @@ var _ = cssutil.WriteCSS(`
 		background: none;
 	}
 
-	.prefui-section > row:not(:first-child) {
-		border-top: 2px solid @theme_bg_color;
-	}
-
 	.prefui-prop > box.vertical > .prefui-prop {
 		margin-top: 6px;
 	}
