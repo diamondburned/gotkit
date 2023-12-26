@@ -23,11 +23,11 @@ func NewWindow(app *Application) *Window {
 	return WrapWindow(app, window)
 }
 
-// WrapWindow wraps a [gtk.Window] into an app.Window.
-func WrapWindow(app *Application, window *gtk.Window) *Window {
-	// Initialize the scale factor state.
+// WrapWindow wraps a [gtk.ApplicationWindow] into an app.Window.
+func WrapWindow(app *Application, window *gtk.ApplicationWindow) *Window {
 	gtkutil.ScaleFactor()
 
+	window.SetApplication(app.Application)
 	if isDevel {
 		window.AddCSSClass("devel")
 	}
