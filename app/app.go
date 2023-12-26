@@ -279,23 +279,7 @@ func (app *Application) RunMain() {
 
 // NewWindow creates a new Window bounded to the Application instance.
 func (app *Application) NewWindow() *Window {
-	window := gtk.NewApplicationWindow(app.Application)
-	window.SetDefaultSize(600, 400)
-
-	// Initialize the scale factor state.
-	gtkutil.ScaleFactor()
-
-	if isDevel {
-		window.AddCSSClass("devel")
-	}
-
-	w := Window{
-		Window: window.Window,
-		app:    app,
-	}
-	w.SetLoading()
-
-	return &w
+	return NewWindow(app)
 }
 
 // AddActionShortcuts binds accelerator strings to action strings.

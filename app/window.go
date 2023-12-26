@@ -7,12 +7,38 @@ import (
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/components/errpopup"
+	"github.com/diamondburned/gotkit/gtkutil"
 )
 
 // Window wraps a gtk.ApplicationWindow.
 type Window struct {
 	gtk.Window
 	app *Application
+}
+
+// NewWindow creates a new Window bounded to the Application instance.
+func NewWindow(app *Application) *Window {
+	window := gtk.NewApplicationWindow(app.Application)
+	window.SetDefaultSize(600, 400)
+	return WrapWindow(app, window)
+}
+
+// WrapWindow wraps a [gtk.Window] into an app.Window.
+func WrapWindow(app *Application, window *gtk.Window) *Window {
+	// Initialize the scale factor state.
+	gtkutil.ScaleFactor()
+
+	if isDevel {
+		window.AddCSSClass("devel")
+	}
+
+	w := Window{
+		Window: window.Window,
+		app:    app,
+	}
+	w.SetLoading()
+
+	return &w
 }
 
 // WithWindow injects the given Window instance into a context. The returned
