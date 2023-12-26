@@ -20,7 +20,9 @@ type Window struct {
 func NewWindow(app *Application) *Window {
 	window := gtk.NewApplicationWindow(app.Application)
 	window.SetDefaultSize(600, 400)
-	return WrapWindow(app, window)
+	w := WrapWindow(app, window)
+	w.SetLoading()
+	return w
 }
 
 // WrapWindow wraps a [gtk.ApplicationWindow] into an app.Window.
@@ -32,13 +34,10 @@ func WrapWindow(app *Application, window *gtk.ApplicationWindow) *Window {
 		window.AddCSSClass("devel")
 	}
 
-	w := Window{
+	return &Window{
 		Window: window.Window,
 		app:    app,
 	}
-	w.SetLoading()
-
-	return &w
 }
 
 // WithWindow injects the given Window instance into a context. The returned
@@ -98,6 +97,8 @@ func (w *Window) Fatal(err ...error) {
 }
 
 // SetLoading shows a spinning circle. It disables the window.
+// Note that this function crashes when the base gtk.Window comes from
+// adw.Window.
 func (w *Window) SetLoading() {
 	spinner := gtk.NewSpinner()
 	spinner.SetSizeRequest(24, 24)
