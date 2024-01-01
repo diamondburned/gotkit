@@ -101,7 +101,7 @@ func (s *State) Get(key string, dst interface{}) bool {
 // The given callback may be immediately called if the value is already
 // available, or it may be called later when the value is available.
 // The callback is always called in the main thread.
-func (s *State) GetAsync(key string, dst interface{}, done func(bool)) {
+func (s *State) GetAsync(key string, dst interface{}, done func()) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -111,13 +111,16 @@ func (s *State) GetAsync(key string, dst interface{}, done func(bool)) {
 			defer s.mut.Unlock()
 
 			s.load()
-			ok := s.get(key, dst)
-			glib.IdleAdd(func() { done(ok) })
+			if s.get(key, dst) {
+				glib.IdleAdd(done)
+			}
 		}()
 		return
 	}
 
-	done(s.get(key, dst))
+	if s.get(key, dst) {
+		done()
+	}
 }
 
 func (s *State) get(key string, dst interface{}) bool {
