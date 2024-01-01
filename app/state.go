@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotkit/utils/config"
 )
 
@@ -84,6 +85,43 @@ func (s *State) Get(key string, dst interface{}) bool {
 	b, ok := s.state[key]
 	s.mut.Unlock()
 
+	if !ok {
+		return false
+	}
+
+	if err := json.Unmarshal(b, dst); err != nil {
+		log.Printf("cannot unmarshal %q into %T: %v", b, dst, err)
+		return false
+	}
+
+	return true
+}
+
+// GetAsync gets the value of the key asynchronously.
+// The given callback may be immediately called if the value is already
+// available, or it may be called later when the value is available.
+// The callback is always called in the main thread.
+func (s *State) GetAsync(key string, dst interface{}, done func(bool)) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if !s.loaded {
+		go func() {
+			s.mut.Lock()
+			defer s.mut.Unlock()
+
+			s.load()
+			ok := s.get(key, dst)
+			glib.IdleAdd(func() { done(ok) })
+		}()
+		return
+	}
+
+	done(s.get(key, dst))
+}
+
+func (s *State) get(key string, dst interface{}) bool {
+	b, ok := s.state[key]
 	if !ok {
 		return false
 	}

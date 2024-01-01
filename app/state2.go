@@ -47,10 +47,10 @@ func (s *TypedState[StateT]) EachKey(f func(key string) (done bool)) {
 }
 
 // Get gets the value of the key.
-func (s *TypedState[StateT]) Get(key string) (value StateT, ok bool) {
+func (s *TypedState[StateT]) Get(key string, f func(StateT, bool)) {
+	var value StateT
 	state := (*State)(s)
-	ok = state.Get(key, &value)
-	return
+	state.GetAsync(key, &value, func(ok bool) { f(value, ok) })
 }
 
 // Exists returns true if key exists.
