@@ -67,6 +67,17 @@ func mustDecodeListItem[T any](s string) T {
 }
 
 // StringObjectValue returns the value of the given string object.
+// The StringObject must originate from a [StringList].
 func StringObjectValue[T any](obj *gtk.StringObject) T {
 	return mustDecodeListItem[T](obj.String())
+}
+
+// ListItemValue returns the value of the given list item.
+// The ListItem must originate from a [ListModel].
+func ListItemValue[T any](item *gtk.ListItem) T {
+	str, ok := item.Item().Cast().(*gtk.StringObject)
+	if !ok {
+		panic("invalid list item type")
+	}
+	return mustDecodeListItem[T](str.String())
 }
