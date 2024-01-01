@@ -147,6 +147,30 @@ func (s *State) Exists(key string) bool {
 	return ok
 }
 
+func (s *State) ExistsAsync(key string, done func(exists bool)) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if !s.loaded {
+		go func() {
+			s.mut.Lock()
+			defer s.mut.Unlock()
+
+			s.load()
+			exists := s.exists(key)
+			glib.IdleAdd(func() { done(exists) })
+		}()
+		return
+	}
+
+	done(s.exists(key))
+}
+
+func (s *State) exists(key string) bool {
+	_, ok := s.state[key]
+	return ok
+}
+
 // Set sets the value of the key. If val = nil, then the key is deleted.
 func (s *State) Set(key string, val interface{}) {
 	var b []byte

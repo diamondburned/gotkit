@@ -55,9 +55,9 @@ func (s *TypedState[StateT]) Get(key string, f func(StateT)) {
 }
 
 // Exists returns true if key exists.
-func (s *TypedState[StateT]) Exists(key string) bool {
+func (s *TypedState[StateT]) Exists(key string, f func(bool)) {
 	state := (*State)(s)
-	return state.Exists(key)
+	state.ExistsAsync(key, func(exists bool) { f(exists) })
 }
 
 // Set sets the value of the key.
