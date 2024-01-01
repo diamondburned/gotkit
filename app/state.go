@@ -103,9 +103,9 @@ func (s *State) Get(key string, dst interface{}) bool {
 // The callback is always called in the main thread.
 func (s *State) GetAsync(key string, dst interface{}, done func()) {
 	s.mut.Lock()
-	defer s.mut.Unlock()
 
 	if !s.loaded {
+		s.mut.Unlock()
 		go func() {
 			s.mut.Lock()
 			defer s.mut.Unlock()
@@ -118,7 +118,10 @@ func (s *State) GetAsync(key string, dst interface{}, done func()) {
 		return
 	}
 
-	if s.get(key, dst) {
+	ok := s.get(key, dst)
+	s.mut.Unlock()
+
+	if ok {
 		done()
 	}
 }
@@ -149,9 +152,9 @@ func (s *State) Exists(key string) bool {
 
 func (s *State) ExistsAsync(key string, done func(exists bool)) {
 	s.mut.Lock()
-	defer s.mut.Unlock()
 
 	if !s.loaded {
+		s.mut.Unlock()
 		go func() {
 			s.mut.Lock()
 			defer s.mut.Unlock()
@@ -163,7 +166,10 @@ func (s *State) ExistsAsync(key string, done func(exists bool)) {
 		return
 	}
 
-	done(s.exists(key))
+	exists := s.exists(key)
+	s.mut.Unlock()
+
+	done(exists)
 }
 
 func (s *State) exists(key string) bool {
