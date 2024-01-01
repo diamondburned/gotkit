@@ -65,3 +65,8 @@ func mustDecodeListItem[T any](s string) T {
 	}
 	return v
 }
+
+// StringObjectValue returns the value of the given string object.
+func StringObjectValue[T any](obj *gtk.StringObject) T {
+	return mustDecodeListItem[T](obj.String())
+}
