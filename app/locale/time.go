@@ -26,35 +26,58 @@ const (
 	Year = 365 * Day
 )
 
-type truncator struct {
-	d time.Duration
-	s string
-}
-
-var longTruncators = []truncator{
-	{d: 1 * Day, s: "Today at %X"},
-	{d: 2 * Day, s: "Yesterday at %X"},
-	{d: Week, s: "%A at %X"},
-	{s: "%X %x"},
-}
+const (
+	relativeToday     = "Today at %X"
+	relativeYesterday = "Yesterday at %X"
+	relativeWeek      = "%A at %X"
+	relativeDefault   = "%X %x"
+)
 
 // TimeAgo formats a long string that expresses the relative time difference
 // from now until t.
-func TimeAgo(t time.Time) string {
-	t = t.Local()
+func TimeAgo(timestamp time.Time) string {
+	timestamp = timestamp.Local()
 
-	trunc := t
+	tts := timestamp
 	now := time.Now().Local()
 
-	for i, truncator := range longTruncators {
-		trunc = trunc.Truncate(truncator.d)
-		now = now.Truncate(truncator.d)
-
-		if trunc.Equal(now) || i == len(longTruncators)-1 {
-			glibTime := glib.NewDateTimeFromGo(t)
-			return glibTime.Format(GetFromDomain("gotkit", truncator.s))
-		}
+	ttsDay := truncateDay(tts)
+	nowDay := truncateDay(now)
+	if ttsDay.Equal(nowDay) {
+		return renderTime(timestamp, relativeToday)
 	}
 
-	panic("unreachable")
+	if ttsDay.Equal(truncateDay(now.Add(-Day))) {
+		return renderTime(timestamp, relativeYesterday)
+	}
+
+	ttsWeek := truncateWeek(tts)
+	nowWeek := truncateWeek(now)
+	if ttsWeek.Equal(nowWeek) {
+		return renderTime(timestamp, relativeWeek)
+	}
+
+	return renderTime(timestamp, relativeDefault)
+}
+
+func renderTime(t time.Time, f string) string {
+	glibTime := glib.NewDateTimeFromGo(t)
+	return glibTime.Format(GetFromDomain("gotkit", f))
+}
+
+// truncateDay truncates the given time to the given day.
+// It differs from time.Truncate in that it truncates to the start of the day
+// according to the local timezone.
+func truncateDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+// truncateWeek truncates the given time to the given week.
+// It differs from time.Truncate in that it truncates to the start of the week
+// according to the local timezone.
+func truncateWeek(t time.Time) time.Time {
+	y, m, d := t.Date()
+	weekday := int(t.Weekday())
+	return time.Date(y, m, d-weekday, 0, 0, 0, 0, t.Location())
 }
