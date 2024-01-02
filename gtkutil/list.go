@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
@@ -68,8 +69,16 @@ func mustDecodeListItem[T any](s string) T {
 
 // StringObjectValue returns the value of the given string object.
 // The StringObject must originate from a [StringList].
-func StringObjectValue[T any](obj *gtk.StringObject) T {
-	return mustDecodeListItem[T](obj.String())
+// If obj is not a *gtk.StringObject, this function will panic.
+func StringObjectValue[T any](obj glib.Objector) T {
+	str, ok := obj.(*gtk.StringObject)
+	if !ok {
+		str, ok = glib.BaseObject(obj).Cast().(*gtk.StringObject)
+	}
+	if !ok {
+		panic("StringObjectValue: obj must be a *gtk.StringObject")
+	}
+	return mustDecodeListItem[T](str.String())
 }
 
 // ListItemValue returns the value of the given list item.
