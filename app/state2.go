@@ -71,3 +71,48 @@ func (s *TypedState[StateT]) Delete(key string) {
 	state := (*State)(s)
 	state.Delete(key)
 }
+
+// SingleStateKey defines a constant key for a state that only has one value.
+type SingleStateKey[StateT any] struct {
+	tails []string
+}
+
+// NewSingleStateKey creates a new SingleStateKey with the given state type and
+// the config path tails.
+func NewSingleStateKey[StateT any](tails ...string) SingleStateKey[StateT] {
+	return SingleStateKey[StateT]{tails: tails}
+}
+
+func (s SingleStateKey[StateT]) Acquire(ctx context.Context) *TypedSingleState[StateT] {
+	state := AcquireState(ctx, s.tails...)
+	return (*TypedSingleState[StateT])(state)
+}
+
+// TypedSingleState is a type-safe wrapper around State that only has one value.
+type TypedSingleState[StateT any] State
+
+// Get gets the value of the key. If the key does not exist, it does not call
+// f.
+func (s *TypedSingleState[StateT]) Get(f func(StateT)) {
+	var value StateT
+	state := (*State)(s)
+	state.GetAsync("", &value, func() { f(value) })
+}
+
+// Exists returns true if key exists.
+func (s *TypedSingleState[StateT]) Exists(f func(bool)) {
+	state := (*State)(s)
+	state.ExistsAsync("", func(exists bool) { f(exists) })
+}
+
+// Set sets the value of the key.
+func (s *TypedSingleState[StateT]) Set(value StateT) {
+	state := (*State)(s)
+	state.Set("", value)
+}
+
+// Delete deletes the key.
+func (s *TypedSingleState[StateT]) Delete() {
+	state := (*State)(s)
+	state.Delete("")
+}
