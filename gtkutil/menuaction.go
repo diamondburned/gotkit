@@ -163,6 +163,31 @@ func BindActionCallbackMap(w gtk.Widgetter, m map[string]ActionCallback) {
 	}
 }
 
+// AddActions adds the given actions to the given widget.
+// Unlike BindActionMap, this function does not need prefixed action names.
+func AddActions(actionMapper gio.ActionMapper, m map[string]func()) {
+	for k, v := range m {
+		if strings.Contains(k, ".") {
+			log.Panicf("invalid action key %q: must not contain prefixed name", k)
+		}
+		actionMapper.AddAction(ActionFunc(k, v))
+	}
+}
+
+// AddActionCallbacks adds the given action callbacks to the given widget.
+// Unlike BindActionCallbackMap, this function does not need prefixed action
+// names.
+func AddActionCallbacks(actionMapper gio.ActionMapper, m map[string]ActionCallback) {
+	for k, v := range m {
+		if strings.Contains(k, ".") {
+			log.Panicf("invalid action key %q: must not contain prefixed name", k)
+		}
+		action := gio.NewSimpleAction(k, v.ArgType)
+		action.ConnectActivate(v.Func)
+		actionMapper.AddAction(action)
+	}
+}
+
 func NewCustomMenuItem(label locale.Localized, id string) *gio.MenuItem {
 	item := gio.NewMenuItem(label.String(), id)
 	setCustomMenuItem(item, id)
