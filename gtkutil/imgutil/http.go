@@ -66,6 +66,33 @@ func markURLInvalid(url string) {
 	invalidURLs.Store(httputil.HashURL(url), time.Now().Unix())
 }
 
+// FetchImageToFile fetches an image from the given URL and saves it to the
+// given file. If the image is already cached, then it will be loaded from the
+// cache instead.
+func FetchImageToFile(ctx context.Context, url string, o Opts) (string, error) {
+	if url == "" {
+		return "", errors.New("empty URL given")
+	}
+
+	if urlIsInvalid(url) {
+		return "", errURLNotFound
+	}
+
+	cacheDir := app.FromContext(ctx).CachePath("img2")
+	cacheDst := urlPath(cacheDir, url)
+
+	if _, err := os.Stat(cacheDst); err == nil {
+		return cacheDst, nil
+	}
+
+	if err := fetchURL(ctx, url, cacheDst); err != nil {
+		return "", err
+	}
+
+	cachegc.Do(cacheDir, CacheAge)
+	return cacheDst, nil
+}
+
 func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) (err error) {
 	if url == "" {
 		return errors.New("empty URL given")

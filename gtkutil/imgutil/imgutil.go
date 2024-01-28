@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/gtkutil/mediautil"
@@ -241,6 +242,26 @@ func WithSizeOverrider(widget gtk.Widgetter, w, h int) OptFunc {
 		o.sizer.w = w
 		o.sizer.h = h
 	}
+}
+
+// AsyncGETIcon GETs the given URL as a GIcon and calls f in the main loop. If
+// the context is cancelled by the time GET is done, then f will not be called.
+func AsyncGETIcon(ctx context.Context, url string, iconFn func(gio.Iconner)) {
+	o := OptsFromContext(ctx)
+	if url == "" {
+		o.onDone(nil)
+		return
+	}
+
+	go func() {
+		dst, err := FetchImageToFile(ctx, url, o)
+		o.onDone(err)
+
+		if err == nil {
+			icon := gio.NewFileIcon(gio.NewFileForPath(dst))
+			glib.IdleAdd(func() { iconFn(icon) })
+		}
+	}()
 }
 
 // AsyncGET GETs the given URL and calls f in the main loop. If the context is
