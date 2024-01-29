@@ -1,7 +1,10 @@
 package gtkutil
 
 import (
+	"log"
+
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
@@ -62,4 +65,46 @@ func ForwardTypingFunc(w gtk.Widgetter, f func() gtk.Widgetter) {
 		return true
 	})
 	gtk.BaseWidget(w).AddController(typingHandler)
+}
+
+// AddCallbackShortcuts adds the given shortcuts to the widget. The shortcuts
+// are given as a map of keybindings to callbacks.
+func AddCallbackShortcuts(w gtk.Widgetter, shortcuts map[string]func()) {
+	controller := gtk.NewShortcutController()
+
+	for key, callback := range shortcuts {
+		trigger := gtk.NewShortcutTriggerParseString(key)
+		if trigger == nil {
+			log.Panicf("gtkutil: failed to parse keybinding %q", key)
+		}
+
+		action := gtk.NewCallbackAction(func(gtk.Widgetter, *glib.Variant) bool {
+			callback()
+			return true
+		})
+
+		shortcut := gtk.NewShortcut(trigger, action)
+		controller.AddShortcut(shortcut)
+	}
+
+	gtk.BaseWidget(w).AddController(controller)
+}
+
+// AddActionShortcuts adds the given shortcuts to the widget. The shortcuts are
+// given as a map of keybindings to action names.
+func AddActionShortcuts(w gtk.Widgetter, shortcuts map[string]string) {
+	controller := gtk.NewShortcutController()
+
+	for key, actionName := range shortcuts {
+		trigger := gtk.NewShortcutTriggerParseString(key)
+		if trigger == nil {
+			log.Panicf("gtkutil: failed to parse keybinding %q", key)
+		}
+
+		action := gtk.NewNamedAction(actionName)
+		shortcut := gtk.NewShortcut(trigger, action)
+		controller.AddShortcut(shortcut)
+	}
+
+	gtk.BaseWidget(w).AddController(controller)
 }
