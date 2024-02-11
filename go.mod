@@ -1,10 +1,13 @@
 module github.com/diamondburned/gotkit
 
-go 1.18
+go 1.21.0
+
+toolchain go1.21.5
 
 require (
 	github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399
-	github.com/diamondburned/gotk4/pkg v0.0.6-0.20231117083507-eb41da62b149
+	github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20240107232253-5f283b5d35bc
+	github.com/diamondburned/gotk4/pkg v0.2.1
 	github.com/leonelquinteros/gotext v1.5.3-0.20230829162019-37f474cfb069
 	github.com/pkg/errors v0.9.1
 	github.com/yalue/merged_fs v1.2.3
@@ -13,6 +16,7 @@ require (
 )
 
 require (
-	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230221090011-e4bae7ad2296 // indirect
+	github.com/KarpelesLab/weak v0.1.1 // indirect
+	go4.org/unsafe/assume-no-moving-gc v0.0.0-20231121144256-b99613f794b6 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )

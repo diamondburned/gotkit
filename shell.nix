@@ -16,6 +16,8 @@ import "${gotk4-nix}/shell.nix" {
 	};
 
 	buildInputs = pkgs: with pkgs; [
+		libadwaita
+
 		# staticcheck takes forever to build gotk4 twice. I'm good.
 		(writeShellScriptBin "staticcheck" "")
 	];
