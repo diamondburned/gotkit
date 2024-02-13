@@ -6,6 +6,13 @@ import (
 	"log/slog"
 )
 
+type ctxKey uint8
+
+const (
+	_ ctxKey = iota
+	preventRecursionKey
+)
+
 // Code borrowed from searKing's multiHandler.
 // https://github.com/searKing/golang/blob/go/v1.2.115/go/log/slog/multi.go
 //
@@ -26,6 +33,14 @@ func (t multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (t multiHandler) Handle(ctx context.Context, record slog.Record) error {
+	if _, ok := ctx.Value(preventRecursionKey).(struct{}); ok {
+		// Avoid infinite recursion.
+		// Thank slog.defaultHandler for being so awfully designed.
+		return nil
+	}
+
+	ctx = context.WithValue(ctx, preventRecursionKey, struct{}{})
+
 	var errs []error
 	for _, w := range t {
 		if w == nil || !w.Enabled(ctx, record.Level) {
@@ -35,6 +50,7 @@ func (t multiHandler) Handle(ctx context.Context, record slog.Record) error {
 			errs = append(errs, err)
 		}
 	}
+
 	return errors.Join(errs...)
 }
 

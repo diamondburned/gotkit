@@ -10,6 +10,8 @@ import (
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/app"
 	"github.com/diamondburned/gotkit/app/locale"
@@ -17,6 +19,7 @@ import (
 	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/gtkutil/cssutil"
 
+	"github.com/diamondburned/gotk4/pkg/core/gioutil"
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 )
 
@@ -53,11 +56,18 @@ var _ = cssutil.WriteCSS(`
 	.logui-column-view {
 		font-family: monospace;
 	}
+	.logui-column-view row:last-child {
+		margin-bottom: 5em;
+	}
 	.logui-column-view cell {
-		padding: 2px;
+		padding: 4px 2px;
 	}
 	.logui-column-view cell:first-child {
-		padding: 2px 6px;
+		padding: 4px 6px;
+	}
+	.logui-message-attrs-key {
+		margin-right: 0.5em;
+		margin-left: 1em;
 	}
 
 	.logui-dark .logui-level-debug { color: #9fa8da; }
@@ -75,11 +85,13 @@ var _ = cssutil.WriteCSS(`
 func NewViewer(ctx context.Context, model *LogListModel) *Viewer {
 	v := Viewer{Model: model, ctx: ctx}
 
-	view := gtk.NewColumnView(gtk.NewMultiSelection(model.ListModel))
+	treeModel := newLogTreeListModel(model)
+
+	view := gtk.NewColumnView(gtk.NewNoSelection(treeModel))
 	view.AddCSSClass("logui-column-view")
 	view.SetShowRowSeparators(false)
 	view.SetShowColumnSeparators(false)
-	view.SetEnableRubberband(true)
+	// view.SetEnableRubberband(true)
 	view.SetHExpand(true)
 	view.SetVExpand(true)
 	view.SetSizeRequest(500, -1)
@@ -89,11 +101,11 @@ func NewViewer(ctx context.Context, model *LogListModel) *Viewer {
 	msgColumn := gtk.NewColumnViewColumn("Message", newMessageColumnFactory())
 	msgColumn.SetExpand(true)
 	view.AppendColumn(msgColumn)
-	view.AppendColumn(gtk.NewColumnViewColumn("Attrs", newAttrsColumnFactory()))
 
 	v.View = view
 
 	scroll := autoscroll.NewWindow()
+	scroll.SetPlacement(gtk.CornerTopLeft)
 	scroll.SetPolicy(gtk.PolicyAutomatic, gtk.PolicyAutomatic)
 	scroll.SetPropagateNaturalWidth(true)
 	scroll.SetPropagateNaturalHeight(true)
@@ -203,13 +215,32 @@ func newTimeColumnFactory() *gtk.ListItemFactory {
 	factory.ConnectSetup(func(item *gtk.ListItem) {
 		label := gtk.NewLabel("")
 		label.AddCSSClass("logui-time")
+		label.SetXAlign(1)
 		label.SetYAlign(0)
-		item.SetChild(label)
+
+		expander := gtk.NewTreeExpander()
+		expander.SetChild(label)
+
+		item.SetChild(expander)
 	})
 	factory.ConnectBind(func(item *gtk.ListItem) {
-		record := LogListModelType.ObjectValue(item.Item())
-		label := item.Child().(*gtk.Label)
-		label.SetText(record.Time.Format("15:04:05.000"))
+		row := rowFromListItem(item)
+		switch row.Depth() {
+		case 0:
+			record := LogListModelType.ObjectValue(row.Item())
+
+			expander := item.Child().(*gtk.TreeExpander)
+			expander.SetListRow(row)
+			expander.SetObjectProperty("hide-expander", record.NumAttrs() == 0)
+
+			label := expander.Child().(*gtk.Label)
+			label.SetText(record.Time.Format("15:04:05.000"))
+			label.SetTooltipText(locale.Time(record.Time, true))
+
+			item.SetSelectable(true)
+		default:
+			item.SetSelectable(false)
+		}
 	})
 	factory.ConnectTeardown(func(item *gtk.ListItem) {
 		item.SetChild(nil)
@@ -222,28 +253,40 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 	factory.ConnectSetup(func(item *gtk.ListItem) {
 		label := gtk.NewLabel("")
 		label.AddCSSClass("logui-level")
-		label.SetXAlign(0)
+		label.SetXAlign(1)
 		label.SetYAlign(0)
 		item.SetChild(label)
 	})
 	factory.ConnectBind(func(item *gtk.ListItem) {
-		record := LogListModelType.ObjectValue(item.Item())
-		level := record.Level.String()
+		row := rowFromListItem(item)
+		switch row.Depth() {
+		case 0:
+			record := LogListModelType.ObjectValue(row.Item())
 
-		label := item.Child().(*gtk.Label)
-		label.SetText(level)
+			label := item.Child().(*gtk.Label)
+			level := record.Level.String()
 
-		switch {
-		case strings.HasPrefix(level, "DEBUG"):
-			label.SetCSSClasses([]string{"logui-level", "logui-level-warn"})
-		case strings.HasPrefix(level, "INFO"):
-			label.SetCSSClasses([]string{"logui-level", "logui-level-info"})
-		case strings.HasPrefix(level, "WARN"):
-			label.SetCSSClasses([]string{"logui-level", "logui-level-warn"})
-		case strings.HasPrefix(level, "ERROR"):
-			label.SetCSSClasses([]string{"logui-level", "logui-level-error"})
+			switch {
+			case strings.HasPrefix(level, "DEBUG"):
+				label.SetCSSClasses([]string{"logui-level", "logui-level-debug"})
+				label.SetText("DEBG")
+			case strings.HasPrefix(level, "INFO"):
+				label.SetCSSClasses([]string{"logui-level", "logui-level-info"})
+				label.SetText("INFO")
+			case strings.HasPrefix(level, "WARN"):
+				label.SetCSSClasses([]string{"logui-level", "logui-level-warn"})
+				label.SetText("WARN")
+			case strings.HasPrefix(level, "ERROR"):
+				label.SetCSSClasses([]string{"logui-level", "logui-level-error"})
+				label.SetText("ERRO")
+			default:
+				label.SetCSSClasses([]string{"logui-level"})
+				label.SetText(level)
+			}
+
+			item.SetSelectable(true)
 		default:
-			label.SetCSSClasses([]string{"logui-level"})
+			item.SetSelectable(false)
 		}
 	})
 	factory.ConnectTeardown(func(item *gtk.ListItem) {
@@ -254,56 +297,72 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 
 func newMessageColumnFactory() *gtk.ListItemFactory {
 	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectSetup(func(item *gtk.ListItem) {
-		label := gtk.NewLabel("")
-		label.AddCSSClass("logui-message")
-		label.SetWrap(false)
-		label.SetXAlign(0)
-		label.SetYAlign(0)
-		item.SetChild(label)
-	})
 	factory.ConnectBind(func(item *gtk.ListItem) {
-		record := LogListModelType.ObjectValue(item.Item())
-		label := item.Child().(*gtk.Label)
-		label.SetText(record.Message)
+		row := rowFromListItem(item)
+		switch row.Depth() {
+		case 0:
+			record := LogListModelType.ObjectValue(row.Item())
+
+			label := gtk.NewLabel(record.Message)
+			label.SetCSSClasses([]string{"logui-message"})
+			label.SetWrap(false)
+			label.SetXAlign(0)
+			label.SetYAlign(0)
+
+			item.SetChild(label)
+			item.SetSelectable(true)
+		case 1:
+			record := LogListModelType.ObjectValue(row.Item())
+
+			grid := gtk.NewGrid()
+			grid.AddCSSClass("logui-message-attrs")
+			grid.SetRowHomogeneous(true)
+			grid.SetColumnSpacing(2)
+
+			var row int
+			record.Attrs(func(attr slog.Attr) bool {
+				key := gtk.NewLabel(attr.Key)
+				key.AddCSSClass("logui-message-attrs-key")
+				key.SetWrap(false)
+				key.SetXAlign(0)
+
+				value := gtk.NewLabel("= " + attr.Value.String())
+				value.AddCSSClass("logui-message-attrs-value")
+				value.SetWrap(false)
+				value.SetXAlign(0)
+
+				grid.Attach(key, 0, row, 1, 1)
+				grid.Attach(value, 1, row, 1, 1)
+
+				row++
+				return true
+			})
+
+			item.SetChild(grid)
+			item.SetSelectable(false)
+		default:
+			item.SetSelectable(false)
+		}
 	})
-	factory.ConnectTeardown(func(item *gtk.ListItem) {
+	factory.ConnectUnbind(func(item *gtk.ListItem) {
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
 }
 
-func newAttrsColumnFactory() *gtk.ListItemFactory {
-	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectSetup(func(item *gtk.ListItem) {
-		grid := gtk.NewGrid()
-		grid.SetRowHomogeneous(true)
-		grid.SetColumnHomogeneous(true)
-		grid.SetRowSpacing(4)
-		grid.SetColumnSpacing(4)
+func newLogTreeListModel(model *LogListModel) *gtk.TreeListModel {
+	return gtk.NewTreeListModel(model.ListModel, false, false,
+		func(o *glib.Object) *gio.ListModel {
+			record := LogListModelType.ObjectValue(o)
 
-		label := gtk.NewLabel("")
-		label.AddCSSClass("logui-attrs")
-		label.SetWrap(false)
-		label.SetYAlign(0)
-		label.SetXAlign(0)
+			model := gioutil.NewListModel[slog.Record]()
+			model.Append(record)
 
-		item.SetChild(label)
-	})
-	factory.ConnectBind(func(item *gtk.ListItem) {
-		record := LogListModelType.ObjectValue(item.Item())
-		label := item.Child().(*gtk.Label)
+			return model.ListModel
+		},
+	)
+}
 
-		var text strings.Builder
-		record.Attrs(func(attr slog.Attr) bool {
-			text.WriteString(attr.Key + "=" + attr.Value.String() + "\n")
-			return true
-		})
-		str := strings.TrimSpace(text.String())
-		label.SetText(str)
-	})
-	factory.ConnectTeardown(func(item *gtk.ListItem) {
-		item.SetChild(nil)
-	})
-	return &factory.ListItemFactory
+func rowFromListItem(item *gtk.ListItem) *gtk.TreeListRow {
+	return item.Item().Cast().(*gtk.TreeListRow)
 }

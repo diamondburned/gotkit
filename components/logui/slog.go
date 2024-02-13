@@ -4,39 +4,42 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/diamondburned/gotk4/pkg/core/gioutil"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 )
 
-var hookFunc = sync.OnceFunc(func() {
-	stderrHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})
+// WrapLogger wraps the given logger with the default logui's log handler.
+// Call this function only once the main loop is running.
+func WrapLogger(logger *slog.Logger) *slog.Logger {
+	handler := MultiHandler(logger.Handler(), DefaultLogHandler())
+	return slog.New(handler)
+}
+
+// SetLogger sets the default slog.Logger to the given logger.
+// The logger is automatically wrapped with the default log handler.
+// Call this function only once the main loop is running.
+func SetLogger(logger *slog.Logger) {
+	slog.SetDefault(WrapLogger(logger))
+}
+
+func init() {
 	handler := MultiHandler(
-		stderrHandler,
+		tint.NewHandler(os.Stderr, &tint.Options{
+			TimeFormat: "15:04:05.000",
+			Level:      slog.LevelDebug,
+			NoColor:    runtime.GOOS == "windows" || !isatty.IsTerminal(os.Stderr.Fd()),
+		}),
 		DefaultLogHandler(),
 	)
 	slog.SetDefault(slog.New(handler))
-})
-
-func init() {
-	// Hook the slog handler only once the main loop is running.
-	// Otherwise, the logging is useless.
-	coreglib.IdleAddPriority(coreglib.PriorityHigh, func() {
-		hookFunc()
-	})
-}
-
-// Hook hooks the default slog handler to the default log handler.
-// This function is called automatically after the main loop starts, but you may
-// call this earlier if you want to log before the main loop starts.
-func Hook() {
-	hookFunc()
 }
 
 // RecordsToString returns a string representation of the given log records.
