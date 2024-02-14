@@ -41,8 +41,15 @@ func (c *AnimationController) ConnectMotion(w gtk.Widgetter) {
 	motion.ConnectEnter(func(x, y float64) { c.Start() })
 	motion.ConnectLeave(func() { c.Stop() })
 
-	base := gtk.BaseWidget(w)
-	base.AddController(motion)
+	parent := gtk.BaseWidget(c.parent)
+	parent.ConnectMap(func() {
+		base := gtk.BaseWidget(w)
+		base.AddController(motion)
+	})
+	parent.ConnectUnmap(func() {
+		base := gtk.BaseWidget(w)
+		base.RemoveController(motion)
+	})
 }
 
 // Avatar is an online variant of adaptive.Avatar.
