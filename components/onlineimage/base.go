@@ -209,7 +209,10 @@ const (
 )
 
 func (b *baseImage) startAnimation() {
-	if b.animation == nil || b.animation.pixbuf == nil || b.animation.paused {
+	if b.animation == nil ||
+		b.animation.paused ||
+		b.animation.pixbuf == nil ||
+		b.animation.animating != 0 {
 		return
 	}
 
@@ -247,7 +250,7 @@ func (b *baseImage) startAnimation() {
 }
 
 func (b *baseImage) stopAnimation() {
-	if b.animation == nil {
+	if b.animation == nil || b.animation.animating == 0 {
 		return
 	}
 
