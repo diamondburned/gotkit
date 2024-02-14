@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"sync"
 
 	"github.com/diamondburned/gotk4/pkg/core/gioutil"
 	"github.com/diamondburned/gotk4/pkg/core/glib"
@@ -364,19 +365,19 @@ func loadPixbufFileManual(ctx context.Context, path string, img ImageSetter, o O
 }
 
 var supportedMIMEsData map[string]struct{}
+var supportedMIMEsInit = sync.OnceFunc(func() {
+	formats := gdkpixbuf.PixbufGetFormats()
+	supportedMIMEsData = make(map[string]struct{}, len(formats))
 
-func supportedMIME(mime string) bool {
-	if supportedMIMEsData == nil {
-		formats := gdkpixbuf.PixbufGetFormats()
-		supportedMIMEsData = make(map[string]struct{}, len(formats))
-
-		for _, format := range formats {
-			for _, mimeType := range format.MIMETypes() {
-				supportedMIMEsData[mimeType] = struct{}{}
-			}
+	for _, format := range formats {
+		for _, mimeType := range format.MIMETypes() {
+			supportedMIMEsData[mimeType] = struct{}{}
 		}
 	}
+})
 
+func supportedMIME(mime string) bool {
+	supportedMIMEsInit()
 	_, ok := supportedMIMEsData[mime]
 	return ok
 }
