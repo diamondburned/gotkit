@@ -72,6 +72,7 @@ func NewWindow() *Window {
 			w.scrollTo(w.upperValue)
 		}
 	})
+
 	w.vadj.NotifyProperty("value", func() {
 		// Skip if we're locked, since we're only updating this if the state is
 		// either bottomed or not.
@@ -170,35 +171,12 @@ const layoutAttachTime = 650 * time.Millisecond
 func (w *Window) scrollTo(targetScroll float64) {
 	w.targetScroll = targetScroll
 
-	if w.fsignal != 0 || w.fclock == nil {
-		return
+	doScroll := func() {
+		if w.targetScroll == targetScroll {
+			w.vadj.SetValue(w.targetScroll)
+		}
 	}
 
-	clock := gdk.BaseFrameClock(w.fclock)
-
-	const frameDuration = int64(layoutAttachTime / time.Microsecond)
-	var lastTime int64
-	prevScroll := w.targetScroll
-
-	// Layout gets called after the Adjustment's size-allocate, so we can
-	// set the scroll here. We can't in the notify callbacks, because
-	// that'll mess up the function.
-	w.fsignal = clock.ConnectLayout(func() {
-		t := clock.FrameTime()
-
-		if prevScroll != w.targetScroll {
-			prevScroll = w.targetScroll
-			lastTime = t
-		}
-
-		w.vadj.SetValue(w.targetScroll)
-
-		if t > lastTime+frameDuration {
-			clock.HandlerDisconnect(w.fsignal)
-			w.fsignal = 0
-		}
-	})
-
-	w.QueueAllocate()
-	w.QueueDraw()
+	glib.IdleAdd(doScroll)
+	glib.TimeoutAdd(uint(layoutAttachTime/time.Millisecond), doScroll)
 }
