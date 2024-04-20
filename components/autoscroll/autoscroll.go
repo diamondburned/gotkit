@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
@@ -178,5 +178,8 @@ func (w *Window) scrollTo(targetScroll float64) {
 	}
 
 	glib.IdleAdd(doScroll)
-	glib.TimeoutAdd(uint(layoutAttachTime/time.Millisecond), doScroll)
+	glib.TimeoutAdd(uint(layoutAttachTime/time.Millisecond), func() bool {
+		doScroll()
+		return glib.SOURCE_REMOVE
+	})
 }
