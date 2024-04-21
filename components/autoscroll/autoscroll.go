@@ -1,10 +1,10 @@
 package autoscroll
 
 import (
+	"context"
+	"log/slog"
 	"math"
-	"time"
 
-	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
@@ -22,13 +22,11 @@ func (s scrollState) is(this scrollState) bool { return s == this }
 // Window describes an automatically scrolled window.
 type Window struct {
 	*gtk.ScrolledWindow
-	view *gtk.Viewport
-	vadj *gtk.Adjustment
+	view   *gtk.Viewport
+	vadj   *gtk.Adjustment
+	logger *slog.Logger
 
 	onBottomed func()
-
-	fclock  gdk.FrameClocker
-	fsignal glib.SignalHandle
 
 	upperValue   float64
 	targetScroll float64
@@ -39,6 +37,7 @@ func NewWindow() *Window {
 	w := Window{
 		upperValue:   math.NaN(),
 		targetScroll: math.NaN(),
+		logger:       slog.Default().With("widget", "autoscroll.Window"),
 	}
 
 	w.ScrolledWindow = gtk.NewScrolledWindow()
@@ -49,46 +48,54 @@ func NewWindow() *Window {
 
 	w.view = gtk.NewViewport(nil, w.vadj)
 	w.view.SetVScrollPolicy(gtk.ScrollNatural)
+	w.view.SetScrollToFocus(false)
 	w.SetChild(w.view)
 
 	w.ConnectMap(func() {
-		w.fclock = w.FrameClock()
-
 		if !math.IsNaN(w.targetScroll) {
-			w.scrollTo(w.targetScroll)
+			w.scrollTo(w.targetScroll, false)
 		}
 	})
 
 	w.vadj.NotifyProperty("upper", func() {
-		lastUpper := w.upperValue
 		w.upperValue = w.vadj.Upper()
 
-		switch w.state {
-		case locked:
-			// Subtract the new value w/ the old value to get the new scroll
-			// offset, then add that to the value.
-			w.scrollTo(w.upperValue - lastUpper + w.vadj.Value())
-		case bottomed:
-			w.scrollTo(w.upperValue)
+		if w.state.is(bottomed) {
+			// If the upper value changes and we're still bottomed, then we need
+			// to scroll to the bottom again.
+			w.logger.Debug(
+				"upper value changed while bottomed, scrolling to bottom",
+				"old_value", w.vadj.Value(),
+				"new_value", w.upperValue)
+
+			w.scrollTo(w.upperValue, true)
 		}
 	})
 
-	w.vadj.NotifyProperty("value", func() {
+	w.vadj.ConnectValueChanged(func() {
 		// Skip if we're locked, since we're only updating this if the state is
 		// either bottomed or not.
 		if w.state.is(locked) {
 			return
 		}
 
-		w.upperValue = w.vadj.Upper()
-
-		// Bottom check.
+		// Check if the user has scrolled anywhere.
 		bottom := w.upperValue - w.vadj.PageSize()
 		if (bottom < 0) || (w.vadj.Value() >= bottom) {
+			w.logger.Debug(
+				"user has scrolled to the bottom",
+				"value", w.vadj.Value(),
+				"bottom_threshold", bottom)
+
 			w.state = bottomed
-			w.scrollTo(w.upperValue)
+			w.scrollTo(w.upperValue, true)
 			w.emitBottomed()
 		} else {
+			w.logger.Log(context.Background(), slog.LevelDebug-1,
+				"user has scrolled somewhere else, unsetting bottomed state",
+				"value", w.vadj.Value(),
+				"bottom_threshold", bottom)
+
 			w.state = 0
 		}
 	})
@@ -106,11 +113,28 @@ func (w *Window) VAdjustment() *gtk.Adjustment {
 	return w.vadj
 }
 
-// SetScrollLocked sets whether or not the scroll is locked when new widgets are
-// added. This is useful if new things will be added into the list, but the
-// scroll window shouldn't move away.
-func (w *Window) SetScrollLocked(scrollLocked bool) {
+// LockScroll locks the scroll to the current value, even if more content is
+// added. The returned function unlocks the scroll.
+func (w *Window) LockScroll() func() {
 	w.state = locked
+
+	old := getScrollAdjustments(w.vadj)
+	w.logger.Debug(
+		"scroll is now locked",
+		"old_value", old.value)
+
+	return func() {
+		new := getScrollAdjustments(w.vadj)
+
+		value := new.upper - old.upper + old.value
+
+		w.logger.Debug(
+			"scrolling to locked value",
+			"old_value", new.value,
+			"new_value", value)
+
+		w.scrollTo(value, false)
+	}
 }
 
 // Unbottom clears the bottomed state.
@@ -128,7 +152,7 @@ func (w *Window) IsBottomed() bool {
 // ScrollToBottom scrolls the window to bottom.
 func (w *Window) ScrollToBottom() {
 	w.state = bottomed
-	w.scrollTo(w.upperValue)
+	w.scrollTo(w.upperValue, false)
 }
 
 // OnBottomed registers the given function to be called when the user bottoms
@@ -163,23 +187,51 @@ func (w *Window) SetChild(child gtk.Widgetter) {
 	}
 }
 
-// layoutAttachTime is a constant for n seconds. It means that the scroll
-// handler is called on every frame for n seconds to ensure a smooth scrolling
-// while things are first loaded.
-const layoutAttachTime = 650 * time.Millisecond
-
-func (w *Window) scrollTo(targetScroll float64) {
+func (w *Window) scrollTo(targetScroll float64, deferFn bool) {
 	w.targetScroll = targetScroll
+	previousAdjs := getScrollAdjustments(w.vadj)
 
 	doScroll := func() {
-		if w.targetScroll == targetScroll {
-			w.vadj.SetValue(w.targetScroll)
+		if w.targetScroll != targetScroll {
+			return
 		}
+
+		currentAdjs := getScrollAdjustments(w.vadj)
+		if currentAdjs.upper != previousAdjs.upper {
+			// Upper value changed while the layout was stabilizing.
+			// Try to recalculate the target to accommodate for the new upper
+			// value.
+			targetScroll += currentAdjs.upper - previousAdjs.upper
+		}
+
+		w.logger.Debug(
+			"emitting scroll event",
+			"adj_previous", previousAdjs,
+			"adj_current", currentAdjs,
+			"wanted_target", w.targetScroll,
+			"actual_target", targetScroll)
+
+		w.vadj.SetValue(targetScroll)
 	}
 
-	glib.IdleAdd(doScroll)
-	glib.TimeoutAdd(uint(layoutAttachTime/time.Millisecond), func() bool {
+	if deferFn {
+		// Schedule the scroll to the next frame.
+		glib.IdleAddPriority(glib.PriorityHigh, doScroll)
+	} else {
 		doScroll()
-		return glib.SOURCE_REMOVE
-	})
+	}
+}
+
+type scrollAdjustments struct {
+	lower float64
+	upper float64
+	value float64
+}
+
+func getScrollAdjustments(adj *gtk.Adjustment) scrollAdjustments {
+	return scrollAdjustments{
+		lower: adj.Lower(),
+		upper: adj.Upper(),
+		value: adj.Value(),
+	}
 }
