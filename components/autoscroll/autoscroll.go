@@ -1,7 +1,6 @@
 package autoscroll
 
 import (
-	"context"
 	"log/slog"
 	"math"
 
@@ -57,18 +56,22 @@ func NewWindow() *Window {
 		}
 	})
 
-	w.vadj.NotifyProperty("upper", func() {
+	var updatedValue bool
+
+	w.vadj.ConnectChanged(func() {
+		updatedValue = true
 		w.upperValue = w.vadj.Upper()
 
 		if w.state.is(bottomed) {
 			// If the upper value changes and we're still bottomed, then we need
 			// to scroll to the bottom again.
+			newValue := w.upperValue - w.vadj.PageSize()
 			w.logger.Debug(
 				"upper value changed while bottomed, scrolling to bottom",
 				"old_value", w.vadj.Value(),
-				"new_value", w.upperValue)
+				"new_value", newValue)
 
-			w.scrollTo(w.upperValue, true)
+			w.scrollTo(newValue, true)
 		}
 	})
 
@@ -80,24 +83,38 @@ func NewWindow() *Window {
 		}
 
 		// Check if the user has scrolled anywhere.
-		bottom := w.upperValue - w.vadj.PageSize()
-		if (bottom < 0) || (w.vadj.Value() >= bottom) {
+		bottomValue := w.upperValue - w.vadj.PageSize()
+		if bottomValue < 0 || w.vadj.Value() >= bottomValue {
 			w.logger.Debug(
 				"user has scrolled to the bottom",
+				"upper", w.upperValue,
 				"value", w.vadj.Value(),
-				"bottom_threshold", bottom)
+				"bottom_threshold", bottomValue)
 
 			w.state = bottomed
-			w.scrollTo(w.upperValue, true)
 			w.emitBottomed()
-		} else {
-			w.logger.Log(context.Background(), slog.LevelDebug-1,
-				"user has scrolled somewhere else, unsetting bottomed state",
-				"value", w.vadj.Value(),
-				"bottom_threshold", bottom)
-
-			w.state = 0
+			return
 		}
+
+		// Either the user has scrolled somewhere else or GTK is still
+		// trying to stabilize the layout. If the upper value does not
+		// change in the next frame, then we can safely assume that the user
+		// has scrolled somewhere else.
+		updatedValue = false
+
+		glib.IdleAdd(func() {
+			if updatedValue {
+				// The value changed, so GTK is still stabilizing the layout.
+				return
+			}
+
+			w.logger.Debug(
+				"user has scrolled somewhere else, unsetting bottomed state",
+				"upper", w.upperValue,
+				"value", w.vadj.Value(),
+				"bottom_threshold", bottomValue)
+			w.state = 0
+		})
 	})
 
 	return &w
@@ -135,6 +152,7 @@ func (w *Window) LockScroll() func() {
 			"new_value", new.value,
 			"scrolling_to_value", value)
 
+		w.state = 0
 		w.scrollTo(value, true)
 	}
 }
@@ -154,7 +172,7 @@ func (w *Window) IsBottomed() bool {
 // ScrollToBottom scrolls the window to bottom.
 func (w *Window) ScrollToBottom() {
 	w.state = bottomed
-	w.scrollTo(w.upperValue, false)
+	w.scrollTo(w.upperValue-w.vadj.PageSize(), false)
 }
 
 // OnBottomed registers the given function to be called when the user bottoms
@@ -217,8 +235,8 @@ func (w *Window) scrollTo(targetScroll float64, deferFn bool) {
 	}
 
 	if deferFn {
-		// Schedule the scroll to the next frame.
-		glib.IdleAddPriority(glib.PriorityHigh, doScroll)
+		// Schedule the scroll until next frame.
+		glib.IdleAdd(doScroll)
 	} else {
 		doScroll()
 	}
