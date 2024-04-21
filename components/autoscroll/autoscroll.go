@@ -125,15 +125,17 @@ func (w *Window) LockScroll() func() {
 
 	return func() {
 		new := getScrollAdjustments(w.vadj)
-
 		value := new.upper - old.upper + old.value
 
 		w.logger.Debug(
 			"scrolling to locked value",
-			"old_value", new.value,
-			"new_value", value)
+			"old_upper", old.upper,
+			"old_value", old.value,
+			"new_upper", new.upper,
+			"new_value", new.value,
+			"scrolling_to_value", value)
 
-		w.scrollTo(value, false)
+		w.scrollTo(value, true)
 	}
 }
 
