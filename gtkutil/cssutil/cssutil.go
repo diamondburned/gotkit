@@ -3,8 +3,8 @@ package cssutil
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
-	"runtime/debug"
 	"strings"
 	"text/template"
 
@@ -73,17 +73,7 @@ func Applyf(widget gtk.Widgetter, f string, v ...interface{}) {
 
 // Apply applies the given CSS into the given widget's style context.
 func Apply(widget gtk.Widgetter, css string) {
-	prov := gtk.NewCSSProvider()
-	prov.ConnectParsingError(func(sec *gtk.CSSSection, err error) {
-		loc := sec.StartLocation()
-		lines := strings.Split(css, "\n")
-		log.Printf(
-			"generated CSS error (%v) at line: %q\n%s",
-			err, lines[loc.Lines()], debug.Stack(),
-		)
-	})
-	prov.LoadFromData(css)
-
+	prov := newCSSProvider("<inline>", css)
 	w := gtk.BaseWidget(widget)
 	s := w.StyleContext()
 	s.AddProvider(prov, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -108,9 +98,7 @@ func AddClass(w gtk.Widgetter, classes ...string) {
 // ApplyGlobalCSS applies the current global CSS to the default display.
 func ApplyGlobalCSS() {
 	globalCSS := templateCSS("global", globalCSS.String())
-
-	prov := newCSSProvider(globalCSS)
-
+	prov := newCSSProvider("<global>", globalCSS)
 	display := gdk.DisplayGetDefault()
 	gtk.StyleContextAddProviderForDisplay(display, prov, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 }
@@ -119,14 +107,26 @@ func ApplyGlobalCSS() {
 func ApplyUserCSS(path string) {
 	f, err := os.ReadFile(path)
 	if err != nil {
-		log.Println("failed to read user.css:", err)
+		if !os.IsNotExist(err) {
+			slog.Error(
+				"failed to read user.css",
+				"path", path,
+				"err", err)
+		} else {
+			slog.Debug(
+				"not reading user.css since it doesn't exist",
+				"path", path)
+		}
 		return
 	}
 
 	if userCSS := string(f); userCSS != "" {
 		userCSS = templateCSS("user.css", userCSS)
+		slog.Debug(
+			"loading user.css",
+			"path", path)
 
-		prov := newCSSProvider(userCSS)
+		prov := newCSSProvider(path, userCSS)
 
 		display := gdk.DisplayGetDefault()
 		// We use a higher priority than USER in order to override the user-
@@ -136,12 +136,16 @@ func ApplyUserCSS(path string) {
 	}
 }
 
-func newCSSProvider(css string) *gtk.CSSProvider {
+func newCSSProvider(file, css string) *gtk.CSSProvider {
 	prov := gtk.NewCSSProvider()
 	prov.ConnectParsingError(func(sec *gtk.CSSSection, err error) {
 		loc := sec.StartLocation()
-
 		lines := strings.Split(css, "\n")
+		slog.Error(
+			"error parsing CSS",
+			"file", file,
+			"line", lines[loc.Lines()],
+			"err", err)
 		log.Printf("CSS error (%v) at line: %q", err, lines[loc.Lines()])
 	})
 	prov.LoadFromData(css)
