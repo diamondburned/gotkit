@@ -6,6 +6,8 @@ github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20240107232253-5f283b5d35bc h1
 github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20240107232253-5f283b5d35bc/go.mod h1:fkvdR7MYO1sI0ex07VYLTc+YK87v24aRFYyMJQ/xAeA=
 github.com/diamondburned/gotk4/pkg v0.2.2-0.20240211143919-4766f5d270f6 h1:LNtH42l0vTVcMZLATrr7WtCrFlzzS564Pnj1Q4bEdNE=
 github.com/diamondburned/gotk4/pkg v0.2.2-0.20240211143919-4766f5d270f6/go.mod h1:DqeOW+MxSZFg9OO+esk4JgQk0TiUJJUBfMltKhG+ub4=
+github.com/diamondburned/gotk4/pkg v0.2.3-0.20240606221803-e395a91f5db3 h1:zIfoTMA4pz2wDi9x5zL6D1rgHYD6R1dIARcIRMZDtF0=
+github.com/diamondburned/gotk4/pkg v0.2.3-0.20240606221803-e395a91f5db3/go.mod h1:DqeOW+MxSZFg9OO+esk4JgQk0TiUJJUBfMltKhG+ub4=
 github.com/leonelquinteros/gotext v1.5.3-0.20230829162019-37f474cfb069 h1:9ZM/t54vDjI3XRw2+HC2DxrH2Giv/jAyv7+Vq2QgXmg=
 github.com/leonelquinteros/gotext v1.5.3-0.20230829162019-37f474cfb069/go.mod h1:AT4NpQrOmyj1L/+hLja6aR0lk81yYYL4ePnj2kp7d6M=
 github.com/lmittmann/tint v1.0.4 h1:LeYihpJ9hyGvE0w+K2okPTGUdVLfng1+nDNVR4vWISc=

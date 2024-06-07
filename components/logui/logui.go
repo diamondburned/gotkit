@@ -173,7 +173,7 @@ func NewViewer(ctx context.Context, model *LogListModel) *Viewer {
 func (v *Viewer) copyAll() {
 	// TODO: copy only the selected items
 
-	content := RecordsToString(v.Model.AllItems())
+	content := RecordsToString(v.Model.All())
 
 	display := gdk.DisplayGetDefault()
 
@@ -182,7 +182,7 @@ func (v *Viewer) copyAll() {
 }
 
 func (v *Viewer) saveAs() {
-	content := RecordsToString(v.Model.AllItems())
+	content := RecordsToString(v.Model.All())
 
 	filePicker := gtk.NewFileChooserNative(
 		app.FromContext(v.ctx).SuffixedTitle(locale.Get("Save Logs")),

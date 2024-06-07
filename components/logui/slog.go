@@ -152,7 +152,7 @@ func (h *LogHandler) Handle(_ context.Context, record slog.Record) error {
 		h.list.Append(record)
 
 		if h.max > 0 {
-			n := h.list.NItems()
+			n := h.list.Len()
 			if n > h.max {
 				h.list.Splice(0, n-h.max)
 			}
