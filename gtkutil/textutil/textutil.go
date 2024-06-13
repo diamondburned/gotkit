@@ -324,10 +324,10 @@ const darkThreshold = 0.65
 
 // ColorIsDark determines if the given RGB colors are dark or not. It takes in
 // colors of range [0.0, 1.0].
-func ColorIsDark(r, g, b float64) bool {
+func ColorIsDark[F float64 | float32](r, g, b F) bool {
 	// Determine the value in the HSV colorspace. Code taken from
 	// lucasb-eyer/go-colorful.
-	v := math.Max(math.Max(r, g), b)
+	v := max(max(r, g), b)
 	return v <= darkThreshold
 }
 
