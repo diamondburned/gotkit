@@ -6,7 +6,7 @@ package onlineimage
 import (
 	"context"
 
-	"github.com/diamondburned/adaptive"
+	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
 )
@@ -54,15 +54,17 @@ func (c *AnimationController) ConnectMotion(w gtk.Widgetter) {
 
 // Avatar is an online variant of adaptive.Avatar.
 type Avatar struct {
-	*adaptive.Avatar
+	*adw.Avatar
 	base baseImage
 }
 
 // NewAvatar creates a new avatar.
 func NewAvatar(ctx context.Context, p imgutil.Provider, size int) *Avatar {
-	a := Avatar{Avatar: adaptive.NewAvatar(size)}
+	a := Avatar{
+		Avatar: adw.NewAvatar(size, "", true),
+	}
 	a.AddCSSClass("onlineimage")
-	a.base.init(ctx, imageParent{&a, a.Image, a.set()}, p)
+	a.base.init(ctx, imageParent{&a, a.Avatar, a.set()}, p)
 
 	return &a
 }
@@ -80,7 +82,7 @@ func (a *Avatar) Disable() {
 
 // SetSizeRequest sets the avatar size.
 func (a *Avatar) SetSizeRequest(size int) {
-	a.Avatar.SetSizeRequest(size)
+	a.Avatar.SetSizeRequest(size, size)
 	a.base.scaler.Invalidate()
 }
 
@@ -92,8 +94,7 @@ func (a *Avatar) EnableAnimation() *AnimationController {
 
 func (a *Avatar) set() imgutil.ImageSetter {
 	return imgutil.ImageSetter{
-		SetFromPixbuf:    a.SetFromPixbuf,
-		SetFromPaintable: a.SetFromPaintable,
+		SetFromPaintable: a.Avatar.SetCustomImage,
 	}
 }
 
