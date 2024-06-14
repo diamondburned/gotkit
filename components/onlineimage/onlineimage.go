@@ -97,8 +97,12 @@ func (a *Avatar) EnableAnimation() *AnimationController {
 func (a *Avatar) set() imgutil.ImageSetter {
 	return imgutil.ImageSetter{
 		SetFromPixbuf: func(pb *gdkpixbuf.Pixbuf) {
-			texture := gdk.NewTextureForPixbuf(pb)
-			a.Avatar.SetCustomImage(texture)
+			if pb != nil {
+				texture := gdk.NewTextureForPixbuf(pb)
+				a.Avatar.SetCustomImage(texture)
+			} else {
+				a.Avatar.SetCustomImage(nil)
+			}
 		},
 		SetFromPaintable: a.Avatar.SetCustomImage,
 	}
