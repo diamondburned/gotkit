@@ -7,6 +7,8 @@ import (
 	"context"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
+	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
 )
@@ -94,6 +96,10 @@ func (a *Avatar) EnableAnimation() *AnimationController {
 
 func (a *Avatar) set() imgutil.ImageSetter {
 	return imgutil.ImageSetter{
+		SetFromPixbuf: func(pb *gdkpixbuf.Pixbuf) {
+			texture := gdk.NewTextureForPixbuf(pb)
+			a.Avatar.SetCustomImage(texture)
+		},
 		SetFromPaintable: a.Avatar.SetCustomImage,
 	}
 }
