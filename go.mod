@@ -5,9 +5,8 @@ go 1.21.0
 toolchain go1.21.5
 
 require (
-	github.com/diamondburned/adaptive v0.0.2-0.20220226002257-ef8720b54399
-	github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20240107232253-5f283b5d35bc
-	github.com/diamondburned/gotk4/pkg v0.2.3-0.20240606221803-e395a91f5db3
+	github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20240712143708-824c3ce8a5f4
+	github.com/diamondburned/gotk4/pkg v0.3.0
 	github.com/leonelquinteros/gotext v1.5.3-0.20230829162019-37f474cfb069
 	github.com/lmittmann/tint v1.0.4
 	github.com/mattn/go-isatty v0.0.20

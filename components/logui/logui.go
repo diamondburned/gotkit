@@ -212,7 +212,7 @@ func (v *Viewer) saveAs() {
 
 func newTimeColumnFactory() *gtk.ListItemFactory {
 	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectSetup(func(item *gtk.ListItem) {
+	factory.ConnectSetup(func(obj *glib.Object) {
 		label := gtk.NewLabel("")
 		label.AddCSSClass("logui-time")
 		label.SetXAlign(1)
@@ -221,9 +221,11 @@ func newTimeColumnFactory() *gtk.ListItemFactory {
 		expander := gtk.NewTreeExpander()
 		expander.SetChild(label)
 
+		item := obj.Cast().(*gtk.ListItem)
 		item.SetChild(expander)
 	})
-	factory.ConnectBind(func(item *gtk.ListItem) {
+	factory.ConnectBind(func(obj *glib.Object) {
+		item := obj.Cast().(*gtk.ListItem)
 		row := rowFromListItem(item)
 		switch row.Depth() {
 		case 0:
@@ -242,7 +244,8 @@ func newTimeColumnFactory() *gtk.ListItemFactory {
 			item.SetSelectable(false)
 		}
 	})
-	factory.ConnectTeardown(func(item *gtk.ListItem) {
+	factory.ConnectTeardown(func(obj *glib.Object) {
+		item := obj.Cast().(*gtk.ListItem)
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
@@ -250,14 +253,17 @@ func newTimeColumnFactory() *gtk.ListItemFactory {
 
 func newLevelColumnFactory() *gtk.ListItemFactory {
 	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectSetup(func(item *gtk.ListItem) {
+	factory.ConnectSetup(func(obj *glib.Object) {
 		label := gtk.NewLabel("")
 		label.AddCSSClass("logui-level")
 		label.SetXAlign(1)
 		label.SetYAlign(0)
+
+		item := obj.Cast().(*gtk.ListItem)
 		item.SetChild(label)
 	})
-	factory.ConnectBind(func(item *gtk.ListItem) {
+	factory.ConnectBind(func(obj *glib.Object) {
+		item := obj.Cast().(*gtk.ListItem)
 		row := rowFromListItem(item)
 		switch row.Depth() {
 		case 0:
@@ -289,7 +295,8 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 			item.SetSelectable(false)
 		}
 	})
-	factory.ConnectTeardown(func(item *gtk.ListItem) {
+	factory.ConnectTeardown(func(obj *glib.Object) {
+		item := obj.Cast().(*gtk.ListItem)
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
@@ -297,7 +304,8 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 
 func newMessageColumnFactory() *gtk.ListItemFactory {
 	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectBind(func(item *gtk.ListItem) {
+	factory.ConnectBind(func(obj *glib.Object) {
+		item := obj.Cast().(*gtk.ListItem)
 		row := rowFromListItem(item)
 		switch row.Depth() {
 		case 0:
@@ -344,7 +352,8 @@ func newMessageColumnFactory() *gtk.ListItemFactory {
 			item.SetSelectable(false)
 		}
 	})
-	factory.ConnectUnbind(func(item *gtk.ListItem) {
+	factory.ConnectUnbind(func(obj *glib.Object) {
+		item := obj.Cast().(*gtk.ListItem)
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
