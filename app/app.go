@@ -38,7 +38,7 @@ func init() {
 	}
 
 	modified := find("vcs.modified")
-	if modified == "true" {
+	if modified == "true" && os.Getenv("GOTKIT_OVERRIDE_DEVEL") == "" {
 		isDevel = true
 	}
 }
