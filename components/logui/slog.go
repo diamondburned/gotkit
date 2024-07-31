@@ -55,9 +55,6 @@ func RecordsToString(iter func(yield func(slog.Record) bool)) string {
 	return text.String()
 }
 
-// DefaultMaxEntries is the default maximum number of log entries.
-const DefaultMaxEntries = 1000
-
 type LogListModel = gioutil.ListModel[slog.Record]
 
 var LogListModelType = gioutil.NewListModelType[slog.Record]()
@@ -70,7 +67,7 @@ type LogHandler struct {
 
 	attrs  []slog.Attr
 	groups string
-	max    int
+	max    atomic.Int32
 }
 
 var _ slog.Handler = (*LogHandler)(nil)
@@ -81,17 +78,10 @@ func NewLogHandler(maxEntries int, opts *slog.HandlerOptions) *LogHandler {
 	h := &LogHandler{
 		level: new(atomic.Pointer[slog.Leveler]),
 		list:  LogListModelType.New(),
-		max:   maxEntries,
 	}
+	h.max.Store(int32(maxEntries))
 	h.level.Store(&opts.Level)
 	return h
-}
-
-// NewDebugLogHandler creates a new LogHandler that logs all levels, including debug.
-func NewDebugLogHandler(maxEntries int) *LogHandler {
-	return NewLogHandler(maxEntries, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
 }
 
 var (
@@ -102,7 +92,11 @@ var (
 // DefaultLogHandler returns the default log handler.
 // Debug logs are enabled by default.
 func DefaultLogHandler() *LogHandler {
-	defaultOnce.Do(func() { defaultHandler = NewDebugLogHandler(DefaultMaxEntries) })
+	defaultOnce.Do(func() {
+		defaultHandler = NewLogHandler(250, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		})
+	})
 	return defaultHandler
 }
 
@@ -130,14 +124,25 @@ func (h *LogHandler) SetLevel(level slog.Leveler) {
 	h.level.Store(&level)
 }
 
+// MaxEntries returns the maximum number of log entries.
+func (h *LogHandler) MaxEntries() int {
+	return int(h.max.Load())
+}
+
+// SetMaxEntries sets the maximum number of log entries.
+func (h *LogHandler) SetMaxEntries(n int) {
+	h.max.Store(int32(n))
+}
+
 func (h *LogHandler) clone() *LogHandler {
-	return &LogHandler{
+	h2 := &LogHandler{
 		level:  h.level,
 		list:   h.list,
 		attrs:  append([]slog.Attr{}, h.attrs...),
 		groups: h.groups,
-		max:    h.max,
 	}
+	h2.max.Store(h.max.Load())
+	return h2
 }
 
 func (h *LogHandler) Enabled(_ context.Context, level slog.Level) bool {
@@ -151,10 +156,11 @@ func (h *LogHandler) Handle(_ context.Context, record slog.Record) error {
 	coreglib.IdleAdd(func() {
 		h.list.Append(record)
 
-		if h.max > 0 {
+		max := int(h.max.Load())
+		if max > 0 {
 			n := h.list.Len()
-			if n > h.max {
-				h.list.Splice(0, n-h.max)
+			if n > max {
+				h.list.Splice(0, n-max)
 			}
 		}
 	})

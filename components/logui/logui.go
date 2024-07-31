@@ -221,12 +221,12 @@ func newTimeColumnFactory() *gtk.ListItemFactory {
 		expander := gtk.NewTreeExpander()
 		expander.SetChild(label)
 
-		item := obj.Cast().(*gtk.ListItem)
+		item := obj.Cast().(*gtk.ColumnViewCell)
 		item.SetChild(expander)
 	})
 	factory.ConnectBind(func(obj *glib.Object) {
-		item := obj.Cast().(*gtk.ListItem)
-		row := rowFromListItem(item)
+		item := obj.Cast().(*gtk.ColumnViewCell)
+		row := rowFromListItem(&item.ListItem)
 		switch row.Depth() {
 		case 0:
 			record := LogListModelType.ObjectValue(row.Item())
@@ -245,7 +245,7 @@ func newTimeColumnFactory() *gtk.ListItemFactory {
 		}
 	})
 	factory.ConnectTeardown(func(obj *glib.Object) {
-		item := obj.Cast().(*gtk.ListItem)
+		item := obj.Cast().(*gtk.ColumnViewCell)
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
@@ -259,12 +259,13 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 		label.SetXAlign(1)
 		label.SetYAlign(0)
 
-		item := obj.Cast().(*gtk.ListItem)
+		item := obj.Cast().(*gtk.ColumnViewCell)
 		item.SetChild(label)
 	})
 	factory.ConnectBind(func(obj *glib.Object) {
-		item := obj.Cast().(*gtk.ListItem)
-		row := rowFromListItem(item)
+		item := obj.Cast().(*gtk.ColumnViewCell)
+
+		row := rowFromListItem(&item.ListItem)
 		switch row.Depth() {
 		case 0:
 			record := LogListModelType.ObjectValue(row.Item())
@@ -296,7 +297,7 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 		}
 	})
 	factory.ConnectTeardown(func(obj *glib.Object) {
-		item := obj.Cast().(*gtk.ListItem)
+		item := obj.Cast().(*gtk.ColumnViewCell)
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
@@ -305,8 +306,9 @@ func newLevelColumnFactory() *gtk.ListItemFactory {
 func newMessageColumnFactory() *gtk.ListItemFactory {
 	factory := gtk.NewSignalListItemFactory()
 	factory.ConnectBind(func(obj *glib.Object) {
-		item := obj.Cast().(*gtk.ListItem)
-		row := rowFromListItem(item)
+		item := obj.Cast().(*gtk.ColumnViewCell)
+
+		row := rowFromListItem(&item.ListItem)
 		switch row.Depth() {
 		case 0:
 			record := LogListModelType.ObjectValue(row.Item())
@@ -353,7 +355,7 @@ func newMessageColumnFactory() *gtk.ListItemFactory {
 		}
 	})
 	factory.ConnectUnbind(func(obj *glib.Object) {
-		item := obj.Cast().(*gtk.ListItem)
+		item := obj.Cast().(*gtk.ColumnViewCell)
 		item.SetChild(nil)
 	})
 	return &factory.ListItemFactory
