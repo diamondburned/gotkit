@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
+	"log/slog"
 	"math"
 	"os"
 	"sync"
@@ -19,7 +19,6 @@ import (
 	"github.com/diamondburned/gotkit/gtkutil"
 	"github.com/diamondburned/gotkit/gtkutil/mediautil"
 	"github.com/pkg/errors"
-	"golang.org/x/image/webp"
 )
 
 type ctxKey uint8
@@ -84,11 +83,6 @@ func (o *Opts) applySizer(w, h int) {
 	}
 }
 
-// ignoreErrors is the list of errors to not log.
-var ignoreErrors = []error{
-	context.Canceled,
-}
-
 func (o *Opts) onDone(err error) {
 	if o.done != nil {
 		done := o.done
@@ -98,17 +92,13 @@ func (o *Opts) onDone(err error) {
 		return
 	}
 
-	if err == nil {
+	if err == nil || errors.Is(err, context.Canceled) {
 		return
 	}
 
-	for _, ignore := range ignoreErrors {
-		if errors.Is(err, ignore) {
-			return
-		}
-	}
-
-	log.Println("imgutil:", err)
+	slog.Error(
+		"unhandled image error",
+		"err", err)
 }
 
 // Error triggers the error handler inside OptFunc if there's one. Otherwise, an
@@ -306,23 +296,32 @@ func get(ctx context.Context, url string, img ImageSetter, async bool) {
 }
 
 func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opts) error {
+	// Slow path, since we need to use PixbufLoader to be able to rescale this.
 	if o.w > 0 && o.h > 0 {
-		// Slow path, since we need to use PixbufLoader to be able to rescale
-		// this.
-		log.Println("loadPixbufFromFile: using loadPixbufFileManual because rescaling is needed")
+		slog.Debug(
+			"using slow path for image loading since rescaling is needed",
+			"path", path,
+			"size", fmt.Sprintf("%dx%d", o.w, o.h),
+			"module", "imgutil.loadPixbufFromFile")
 		return loadPixbufFileManual(ctx, path, img, o)
 	}
 
 	anim, err := gdkpixbuf.NewPixbufAnimationFromFile(path)
 	if err != nil {
-		log.Println("loadPixbufFromFile: PixbufAnimationFromFile failed, manually loading it; error:", err)
+		slog.Debug(
+			"failed to load image using PixbufAnimationFromFile, using slow path",
+			"path", path,
+			"err", err,
+			"module", "imgutil.loadPixbufFromFile")
 		return loadPixbufFileManual(ctx, path, img, o)
 	}
 
 	glib.IdleAdd(func() {
 		select {
 		case <-ctx.Done():
-			log.Println("loadPixbufFromFile: cannot set:", ctx.Err())
+			slog.Error(
+				"cannot set image since the context is done",
+				"err", ctx.Err())
 			return
 		default:
 		}
@@ -348,7 +347,7 @@ func loadPixbufFromFile(ctx context.Context, path string, img ImageSetter, o Opt
 			return
 		}
 
-		log.Printf("was unable to load image for ImageSetter")
+		slog.Error("was unable to load image for ImageSetter since no setter was found")
 	})
 
 	return nil
@@ -385,15 +384,14 @@ func supportedMIME(mime string) bool {
 func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error {
 	var mime string
 	r, mime = mediautil.MIMEBuffered(r)
-	log.Println("loadPixbuf: manually loading image of MIME type", mime)
+
+	logger := slog.Default().With(
+		"mime", mime,
+		"module", "imgutil.loadPixbuf")
+	logger.Debug("manually loading image from stream without caching")
 
 	if !supportedMIME(mime) {
-		switch mime {
-		case "image/webp":
-			return loadStdImage(ctx, newWebPDecoder(r), img, o)
-		default:
-			log.Printf("got unknown image type %q, continuing anyway", mime)
-		}
+		logger.Warn("unsupported image type")
 	}
 
 	var size [2]int
@@ -414,14 +412,22 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 		}
 	})
 
-	if err := pixbufLoaderReadFrom(loader, r); err != nil {
-		return errors.Wrap(err, "reader error")
+	_, err := io.Copy(gioutil.PixbufLoaderWriter(loader), r)
+	if err != nil {
+		loader.Close()
+		return err
+	}
+
+	if err := loader.Close(); err != nil {
+		return fmt.Errorf("failed to close PixbufLoader: %w", err)
 	}
 
 	glib.IdleAdd(func() {
 		select {
 		case <-ctx.Done():
-			log.Println("loadPixbuf: cannot load image:", ctx.Err())
+			slog.Error(
+				"cannot set image since the context is done",
+				"err", ctx.Err())
 			return
 		default:
 		}
@@ -457,7 +463,10 @@ func loadPixbuf(ctx context.Context, r io.Reader, img ImageSetter, o Opts) error
 			return
 		}
 
-		log.Printf("was unable to load image for ImageSetter")
+		slog.Error(
+			"was unable to load image for ImageSetter since no setter was found",
+			"mime", mime,
+			"module", "imgutil.loadPixbuf")
 	})
 
 	return nil
@@ -474,7 +483,9 @@ func loadStdImage(ctx context.Context, decoder func() (image.Image, error), sett
 	glib.IdleAdd(func() {
 		select {
 		case <-ctx.Done():
-			log.Println("loadStdImage: cannot set:", ctx.Err())
+			slog.Error(
+				"cannot set image since the context is done",
+				"err", ctx.Err())
 			return
 		default:
 		}
@@ -493,26 +504,8 @@ func loadStdImage(ctx context.Context, decoder func() (image.Image, error), sett
 			return
 		}
 
-		log.Printf("was unable to load image for ImageSetter")
+		slog.Error("was unable to load image for ImageSetter since no setter was found")
 	})
-
-	return nil
-}
-
-func newWebPDecoder(r io.Reader) func() (image.Image, error) {
-	return func() (image.Image, error) { return webp.Decode(r) }
-}
-
-func pixbufLoaderReadFrom(l *gdkpixbuf.PixbufLoader, r io.Reader) error {
-	_, err := io.Copy(gioutil.PixbufLoaderWriter(l), r)
-	if err != nil {
-		l.Close()
-		return err
-	}
-
-	if err := l.Close(); err != nil {
-		return fmt.Errorf("failed to close PixbufLoader: %w", err)
-	}
 
 	return nil
 }
