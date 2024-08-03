@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/gotkit/utils/osutil"
 	"github.com/pkg/errors"
 )
 
@@ -114,27 +115,5 @@ func WithTmpFile(dst, pattern string, fn func(*os.File) error) error {
 	if IsFile(dst) {
 		return nil
 	}
-
-	dir := filepath.Dir(dst)
-
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return cacheError{err, "cannot mkdir -p"}
-	}
-
-	f, err := os.CreateTemp(dir, ".tmp."+pattern)
-	if err != nil {
-		return cacheError{err, "cannot mktemp"}
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-
-	if err := fn(f); err != nil {
-		return err
-	}
-
-	if err := os.Rename(f.Name(), dst); err != nil {
-		return cacheError{err, "cannot rename temp file"}
-	}
-
-	return nil
+	return osutil.UseFileWithPattern(dst, pattern, fn)
 }
