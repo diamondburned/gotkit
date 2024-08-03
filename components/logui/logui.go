@@ -199,7 +199,11 @@ func (v *Viewer) saveAs() {
 
 		folderPath := filePicker.CurrentFolder().Path()
 		fileName := filePicker.CurrentName()
-		filePath := filepath.Join(folderPath, fileName)
+
+		filePath := fileName
+		if !filepath.IsAbs(filePath) {
+			filePath = filepath.Join(folderPath, fileName)
+		}
 
 		go func() {
 			if err := os.WriteFile(filePath, []byte(content), 0640); err != nil {
