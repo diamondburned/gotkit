@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
@@ -184,25 +183,20 @@ func (v *Viewer) copyAll() {
 func (v *Viewer) saveAs() {
 	content := RecordsToString(v.Model.All())
 
-	filePicker := gtk.NewFileChooserNative(
-		app.FromContext(v.ctx).SuffixedTitle(locale.Get("Save Logs")),
-		&v.ApplicationWindow.Window,
-		gtk.FileChooserActionSave,
-		locale.Get("Save"),
-		locale.Get("Cancel"))
-	filePicker.SetCreateFolders(true)
-	filePicker.SetCurrentName("logs.txt")
-	filePicker.ConnectResponse(func(response int) {
-		if response != int(gtk.ResponseAccept) {
+	fileDialog := gtk.NewFileDialog()
+	fileDialog.SetTitle(app.FromContext(v.ctx).SuffixedTitle(locale.Get("Save Logs")))
+	fileDialog.SetInitialName("dissent-logs.txt")
+	fileDialog.Save(context.Background(), &v.ApplicationWindow.Window, func(async gio.AsyncResulter) {
+		file, err := fileDialog.SaveFinish(async)
+		if err != nil {
+			app.Error(v.ctx, fmt.Errorf("failed to save logs: %w", err))
 			return
 		}
 
-		folderPath := filePicker.CurrentFolder().Path()
-		fileName := filePicker.CurrentName()
-
-		filePath := fileName
-		if !filepath.IsAbs(filePath) {
-			filePath = filepath.Join(folderPath, fileName)
+		filePath := file.Path()
+		if filePath == "" {
+			app.Error(v.ctx, fmt.Errorf("failed to save logs: no file path"))
+			return
 		}
 
 		go func() {
@@ -211,7 +205,6 @@ func (v *Viewer) saveAs() {
 			}
 		}()
 	})
-	filePicker.Show()
 }
 
 func newTimeColumnFactory() *gtk.ListItemFactory {
