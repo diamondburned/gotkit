@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -314,23 +315,23 @@ func setEntryIcon(entry *gtk.Entry, icon, text string) {
 }
 
 // EnumList is a preference property of type stringer.
-type EnumList struct {
+type EnumList[T comparable] struct {
 	Pubsub
-	EnumListMeta
-	val string
+	EnumListMeta[T]
+	val T
 	mut sync.RWMutex
 }
 
 // EnumListMeta is the metadata of an EnumList.
-type EnumListMeta struct {
+type EnumListMeta[T comparable] struct {
 	PropMeta
-	Validate func(string) error
-	Options  []string
+	Validate func(T) error
+	Options  []T
 }
 
 // NewEnumList creates a new EnumList instance.
-func NewEnumList(def string, prop EnumListMeta) *EnumList {
-	l := &EnumList{
+func NewEnumList[T comparable](def T, prop EnumListMeta[T]) *EnumList[T] {
+	l := &EnumList[T]{
 		Pubsub:       *NewPubsub(),
 		EnumListMeta: prop,
 
@@ -347,7 +348,7 @@ func NewEnumList(def string, prop EnumListMeta) *EnumList {
 
 // Publish publishes the new value. If the value isn't within Options, then the
 // method will panic.
-func (l *EnumList) Publish(v string) {
+func (l *EnumList[T]) Publish(v T) {
 	if !l.IsValid(v) {
 		log.Panicf("publishing invalid value %q, possible: %q.", v, l.Options)
 	}
@@ -360,20 +361,19 @@ func (l *EnumList) Publish(v string) {
 }
 
 // Value gets the current enum value.
-func (l *EnumList) Value() string {
+func (l *EnumList[T]) Value() T {
 	l.mut.RLock()
 	defer l.mut.RUnlock()
 
 	return l.val
 }
 
-func (l *EnumList) MarshalJSON() ([]byte, error) {
+func (l *EnumList[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(l.Value())
 }
 
-func (l *EnumList) UnmarshalJSON(blob []byte) error {
-	var str string
-
+func (l *EnumList[T]) UnmarshalJSON(blob []byte) error {
+	var str T
 	if err := json.Unmarshal(blob, &str); err != nil {
 		return fmt.Errorf("cannot unmarshal enum %q: %v", blob, err)
 	}
@@ -387,7 +387,7 @@ func (l *EnumList) UnmarshalJSON(blob []byte) error {
 }
 
 // IsValid returns true if the given value is a valid enum value.
-func (l *EnumList) IsValid(str string) bool {
+func (l *EnumList[T]) IsValid(str T) bool {
 	for _, opt := range l.Options {
 		if opt == str {
 			return true
@@ -397,28 +397,40 @@ func (l *EnumList) IsValid(str string) bool {
 }
 
 // CreateWidget creates either a *gtk.Entry or a *gtk.TextView.
-func (l *EnumList) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
-	combo := gtk.NewComboBoxText()
-	combo.AddCSSClass("prefui-prop")
-	combo.AddCSSClass("prefui-prop-enumlist")
-	for _, text := range l.Options {
-		combo.Append(text, text)
+func (l *EnumList[T]) CreateWidget(ctx context.Context, save func()) gtk.Widgetter {
+	items := make([]string, len(l.Options))
+	for i, opt := range l.Options {
+		switch opt := any(opt).(type) {
+		case string:
+			items[i] = opt
+		case fmt.Stringer:
+			items[i] = opt.String()
+		default:
+			items[i] = fmt.Sprint(opt)
+		}
 	}
-	bindPropWidget(l, combo, "changed", propFuncs{
+
+	dropdown := gtk.NewDropDownFromStrings(items)
+	dropdown.AddCSSClass("prefui-prop")
+	dropdown.AddCSSClass("prefui-prop-enumlist")
+
+	bindPropWidget(l, dropdown, "notify::selected", propFuncs{
 		save: save,
 		set: func() {
-			combo.SetActiveID(l.Value())
+			i := slices.Index(l.Options, l.Value())
+			dropdown.SetSelected(uint(i))
 		},
 		publish: func() bool {
-			l.Publish(combo.ActiveID())
+			l.Publish(l.Options[dropdown.Selected()])
 			return true
 		},
 	})
-	return combo
+
+	return dropdown
 }
 
 // WidgetIsLarge returns false.
-func (l *EnumList) WidgetIsLarge() bool { return false }
+func (l *EnumList[T]) WidgetIsLarge() bool { return false }
 
 type propFuncs struct {
 	save    func()
