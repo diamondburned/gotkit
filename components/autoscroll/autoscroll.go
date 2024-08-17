@@ -85,12 +85,6 @@ func NewWindow() *Window {
 		// Check if the user has scrolled anywhere.
 		bottomValue := w.upperValue - w.vadj.PageSize()
 		if bottomValue < 0 || w.vadj.Value() >= bottomValue {
-			w.logger.Debug(
-				"user has scrolled to the bottom",
-				"upper", w.upperValue,
-				"value", w.vadj.Value(),
-				"bottom_threshold", bottomValue)
-
 			w.state = bottomed
 			w.emitBottomed()
 			return
