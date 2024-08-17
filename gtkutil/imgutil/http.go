@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -105,8 +105,12 @@ func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) (err e
 	cacheDir := app.FromContext(ctx).CachePath("img2")
 	cacheDst := urlPath(cacheDir, url)
 
-	if err = loadPixbufFromFile(ctx, cacheDst, img, o); err == nil {
-		return nil
+	// Perform a stat() before we call loadPixbufFromFile to prevent spurious
+	// error logging.
+	if _, err = os.Stat(cacheDst); err == nil {
+		if err = loadPixbufFromFile(ctx, cacheDst, img, o); err == nil {
+			return nil
+		}
 	}
 
 	if err = fetchURL(ctx, url, cacheDst); err == nil {
@@ -120,7 +124,11 @@ func fetchImage(ctx context.Context, url string, img ImageSetter, o Opts) (err e
 	// See if this is a cache error. If it is, then just don't use the cache
 	// at all.
 	if cachegc.IsCacheError(err) {
-		log.Println("cache error:", err, "(falling back to HTTP)")
+		slog.Warn(
+			"error occured while handling image cache, falling back to fetching",
+			"err", err,
+			"url", url,
+			"path", cacheDst)
 
 		r, err := getBody(ctx, url)
 		if err != nil {
