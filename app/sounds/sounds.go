@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/core/glib"
@@ -23,6 +25,20 @@ var embeddedSoundsFS embed.FS
 
 // SoundsFS is a list of filesystems to search for sounds.
 var SoundsFS = []fs.FS{embeddedSoundsFS}
+
+var volume atomic.Pointer[float64]
+
+// DefaultVolume is the default volume of the sound player.
+const DefaultVolume = 0.6
+
+func init() { SetVolume(DefaultVolume) }
+
+// SetVolume sets the volume of the sound player. The volume is a float64
+// between 0 and 1. Values outside of this range will be clamped.
+func SetVolume(v float64) {
+	v = math.Max(0, math.Min(1, v))
+	volume.Store(&v)
+}
 
 // Sound IDs.
 const (
@@ -170,6 +186,10 @@ func play(app *app.Application, id string) {
 					playing: true,
 					file:    soundFile,
 				})
+			}
+
+			if volume := volume.Load(); volume != nil {
+				soundFile.SetVolume(*volume)
 			}
 
 			soundFile.Play()
