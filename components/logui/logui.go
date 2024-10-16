@@ -189,7 +189,6 @@ func (v *Viewer) saveAs() {
 	fileDialog.Save(context.Background(), &v.ApplicationWindow.Window, func(async gio.AsyncResulter) {
 		file, err := fileDialog.SaveFinish(async)
 		if err != nil {
-			app.Error(v.ctx, fmt.Errorf("failed to save logs: %w", err))
 			return
 		}
 
