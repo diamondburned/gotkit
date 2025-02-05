@@ -1,12 +1,11 @@
 package osutil
 
 import (
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
-	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 )
 
@@ -30,6 +29,8 @@ func UseFile(path string, fn func(*os.File) error) error {
 	return UseFileWithPattern(path, ".tmp.*", fn)
 }
 
+var windowsFileLock sync.Mutex
+
 // UseFileWithPattern is the same as UseFile, but it also takes a temporary file
 // pattern. The pattern may not be used on all platforms.
 func UseFileWithPattern(path, tmpPattern string, fn func(*os.File) error) error {
@@ -38,20 +39,10 @@ func UseFileWithPattern(path, tmpPattern string, fn func(*os.File) error) error 
 		return errors.Wrap(err, "cannot mkdir -p")
 	}
 
-	if preferFileLocking {
-		lock := flock.New(path)
-
-		if err := lock.Lock(); err != nil {
-			return errors.Wrap(err, "cannot lock file before writing")
-		}
-		defer func() {
-			if err := lock.Unlock(); err != nil {
-				slog.Error(
-					"failed to unlock file after writing",
-					"path", path,
-					"err", err)
-			}
-		}()
+	if runtime.GOOS == "windows" {
+		// Prefer slow lock, because flock is being weird on Windows.
+		windowsFileLock.Lock()
+		defer windowsFileLock.Unlock()
 
 		// Windows doesn't have rename(2) semantics. We can only write directly
 		// to the file.
