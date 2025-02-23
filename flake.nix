@@ -39,6 +39,9 @@
           ];
 
           packages = with pkgs; [ self.formatter.${system} ];
+
+          go = pkgs.go_1_24;
+          inherit (pkgs) gopls gotools;
         };
 
         formatter = pkgs.nixfmt-rfc-style;

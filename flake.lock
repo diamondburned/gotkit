@@ -80,11 +80,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1720881822,
-        "narHash": "sha256-2t2siKfD1zuCzess5VJrQZ/ochkddx7580AoL2EetQs=",
+        "lastModified": 1740278396,
+        "narHash": "sha256-O8Hks3G9qsgFYMuBycVS6WdN/4zDdnsop/gN4pKOnXA=",
         "owner": "diamondburned",
         "repo": "gotk4-nix",
-        "rev": "637932f39f43a2ed7915f60ecceee93807cb3bd3",
+        "rev": "a57edb877234c00763b8055305ddb196e82a5e72",
         "type": "github"
       },
       "original": {
@@ -144,11 +144,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1720542800,
-        "narHash": "sha256-ZgnNHuKV6h2+fQ5LuqnUaqZey1Lqqt5dTUAiAnqH0QQ=",
+        "lastModified": 1739866667,
+        "narHash": "sha256-EO1ygNKZlsAC9avfcwHkKGMsmipUk1Uc0TbrEZpkn64=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "feb2849fdeb70028c70d73b848214b00d324a497",
+        "rev": "73cf49b8ad837ade2de76f87eb53fc85ed5d4680",
         "type": "github"
       },
       "original": {
