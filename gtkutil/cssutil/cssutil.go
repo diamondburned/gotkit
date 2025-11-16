@@ -73,7 +73,7 @@ func Applyf(widget gtk.Widgetter, f string, v ...interface{}) {
 
 // Apply applies the given CSS into the given widget's style context.
 func Apply(widget gtk.Widgetter, css string) {
-	prov := newCSSProvider("<inline>", css)
+	prov := NewCSSProvFromString("<inline>", css)
 	w := gtk.BaseWidget(widget)
 	s := w.StyleContext()
 	s.AddProvider(prov, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -98,9 +98,17 @@ func AddClass(w gtk.Widgetter, classes ...string) {
 // ApplyGlobalCSS applies the current global CSS to the default display.
 func ApplyGlobalCSS() {
 	globalCSS := templateCSS("global", globalCSS.String())
-	prov := newCSSProvider("<global>", globalCSS)
+	prov := NewCSSProvFromString("<global>", globalCSS)
 	display := gdk.DisplayGetDefault()
 	gtk.StyleContextAddProviderForDisplay(display, prov, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+}
+
+// ApplyCSSProvider applies the provided provider to the default display.
+func ApplyCSSProvider(prov *gtk.CSSProvider) {
+	templatedCSS := templateCSS("provider", prov.String())
+	templatedProv := NewCSSProvFromString("<provider>", templatedCSS)
+	display := gdk.DisplayGetDefault()
+	gtk.StyleContextAddProviderForDisplay(display, templatedProv, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 }
 
 // ApplyUserCSS applies the user CSS at the given path.
@@ -126,7 +134,7 @@ func ApplyUserCSS(path string) {
 			"loading user.css",
 			"path", path)
 
-		prov := newCSSProvider(path, userCSS)
+		prov := NewCSSProvFromString(path, userCSS)
 
 		display := gdk.DisplayGetDefault()
 		// We use a higher priority than USER in order to override the user-
@@ -136,7 +144,7 @@ func ApplyUserCSS(path string) {
 	}
 }
 
-func newCSSProvider(file, css string) *gtk.CSSProvider {
+func newCSSProvider(file) *gtk.CSSProvider {
 	prov := gtk.NewCSSProvider()
 	prov.ConnectParsingError(func(sec *gtk.CSSSection, err error) {
 		loc := sec.StartLocation()
@@ -148,6 +156,19 @@ func newCSSProvider(file, css string) *gtk.CSSProvider {
 			"err", err)
 		log.Printf("CSS error (%v) at line: %q", err, lines[loc.Lines()])
 	})
-	prov.LoadFromData(css)
+	return prov
+}
+
+// NewCSSProvFromString returns a CSSProvider object from a string
+func NewCSSProvFromString(file, css string) *gtk.CSSProvider {
+	prov := newCSSProvider(file)
+	prov.LoadFromString(css)
+	return prov
+}
+
+// NewCSSProvFromResource returns a CSSProvider object from a resource path
+func NewCSSProvFromResource(file, resourcePath string) *gtk.CSSProvider {
+	prov := newCSSProvider(file)
+	prov.LoadFromResource(resourcePath)
 	return prov
 }
