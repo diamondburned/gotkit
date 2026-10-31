@@ -1,6 +1,6 @@
-// Package onlineimage contains image widgets that can fetch from image
-// providers, usually online ones. It provides lazy HiDPI scaling by
-// automatically reloading images when the scale factor changes.
+// Package onlineimage contains a gdk.Paintable that draws images fetched from
+// image providers, usually online ones. The paintable can be shown by any
+// widget that takes a paintable, such as gtk.Picture and gtk.Image.
 package onlineimage
 
 import (
@@ -9,203 +9,312 @@ import (
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gdkpixbuf/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotkit/gtkutil/imgutil"
+
+	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
 )
 
-// CanAnimate is true by default, which allows EnableAnimation to be called on
-// certain images to allow animations to be played back.
-var CanAnimate = true
+// MaxFPS is the maximum FPS to play an animation (often a GIF) at.
+//
+// For more information, see
+// https://wunkolo.github.io/post/2020/02/buttery-smooth-10fps/.
+const MaxFPS = 50
 
-type AnimationController baseImage
+const maxFPSDelay = 1000 / MaxFPS
 
-// Start starts the animation playback in the background. The animation isn't
-// stopped until it is either unmapped or Stop is called.
-func (c *AnimationController) Start() {
-	(*baseImage)(c).startAnimation()
+// Paintable is a gdk.Paintable that draws an image fetched from an
+// imgutil.Provider. The image is only fetched once the paintable is first
+// drawn, so images that are never shown are never fetched. GTK scales the image
+// when drawing it, so it stays sharp at any size and scale factor.
+type Paintable struct {
+	coreglib.Object
+	*gdk.Paintable
+
+	ctx  context.Context
+	prov imgutil.Provider
+	url  string
+
+	fetched bool
+	cancel  context.CancelFunc
+	// eager is true if the image is fetched without being drawn first.
+	eager bool
+
+	// image is the fetched image, or nil if there is none yet.
+	image   gdk.Paintabler
+	anim    *animation
+	playing bool
 }
 
-// Stop stops the animation playback.
-func (c *AnimationController) Stop() {
-	(*baseImage)(c).stopAnimation()
+// animation is an animated image. Its frames are drawn while it is playing.
+type animation struct {
+	pixbuf *gdkpixbuf.PixbufAnimation
+	iter   *gdkpixbuf.PixbufAnimationIter
+	frame  *gdk.Texture
+	// next draws the next frame.
+	next glib.SourceHandle
 }
 
-// OnHover binds the controller to a motion controller attached to the image
-// widget. When the user hovers over the image, the animation plays.
-func (c *AnimationController) OnHover() {
-	c.ConnectMotion(c.parent)
+var paintableType = coreglib.RegisterSubclass[*Paintable](
+	coreglib.WithGTypeName("GotkitOnlinePaintable"),
+	coreglib.WithOverrides(func(p *Paintable) coreglib.ObjectOverrides {
+		return coreglib.ObjectOverrides{
+			Init:    func() { p.Paintable = &gdk.Paintable{Object: &p.Object} },
+			Dispose: p.reset,
+		}
+	}),
+	coreglib.WithOverrides(func(p *Paintable) gdk.PaintableOverrides {
+		return gdk.PaintableOverrides{
+			IntrinsicWidth:  p.intrinsicWidth,
+			IntrinsicHeight: p.intrinsicHeight,
+			Snapshot:        p.snapshot,
+		}
+	}),
+)
+
+// NewPaintable creates a new Paintable that fetches images using the given
+// provider. imgutil options in ctx apply to every fetched image.
+func NewPaintable(ctx context.Context, prov imgutil.Provider) *Paintable {
+	p := paintableType.New()
+	p.ctx = ctx
+	p.prov = prov
+	return p
 }
 
-// ConnectMotion connects a motion controller to the given widget that will
-// activate the animation when it's hovered over (entered).
-func (c *AnimationController) ConnectMotion(w gtk.Widgetter) {
+// URL returns the URL of the image.
+func (p *Paintable) URL() string {
+	return p.url
+}
+
+// SetURL sets the URL of the image. An empty URL clears the image.
+func (p *Paintable) SetURL(url string) {
+	if p.url == url {
+		return
+	}
+
+	hadImage := p.image != nil
+
+	p.reset()
+	p.url = url
+
+	if hadImage {
+		p.InvalidateSize()
+	}
+	// Redraw, which fetches the new image if the paintable is shown.
+	p.InvalidateContents()
+	if p.eager {
+		p.Fetch()
+	}
+}
+
+// HasImage returns true if the image has been fetched.
+func (p *Paintable) HasImage() bool {
+	return p.image != nil
+}
+
+// Fetch fetches the image if it has not been fetched yet. Drawing the paintable
+// fetches the image, so this is only needed when the image must be fetched
+// before the paintable is drawn.
+func (p *Paintable) Fetch() {
+	if p.fetched || p.url == "" {
+		return
+	}
+	p.fetched = true
+
+	ctx, cancel := context.WithCancel(p.ctx)
+	p.cancel = cancel
+
+	imgutil.DoProviderURL(ctx, p.prov, p.url, imgutil.ImageSetter{
+		SetFromPixbuf: func(pixbuf *gdkpixbuf.Pixbuf) {
+			p.setImage(ctx, gdk.NewTextureForPixbuf(pixbuf), nil)
+		},
+		SetFromAnimation: func(anim *gdkpixbuf.PixbufAnimation) {
+			p.setImage(ctx, gdk.NewTextureForPixbuf(anim.StaticImage()), anim)
+		},
+		SetFromPaintable: func(image gdk.Paintabler) {
+			p.setImage(ctx, image, nil)
+		},
+	})
+}
+
+func (p *Paintable) setImage(ctx context.Context, image gdk.Paintabler, anim *gdkpixbuf.PixbufAnimation) {
+	// The URL was changed or the paintable was disposed.
+	if ctx.Err() != nil {
+		return
+	}
+
+	p.image = image
+	if anim != nil {
+		p.anim = &animation{pixbuf: anim}
+	}
+
+	p.InvalidateSize()
+	p.InvalidateContents()
+}
+
+// reset cancels fetching and drops the image.
+func (p *Paintable) reset() {
+	if p.cancel != nil {
+		p.cancel()
+		p.cancel = nil
+	}
+
+	p.stopAnimation()
+	p.fetched = false
+	p.image = nil
+	p.anim = nil
+}
+
+// SetPlaying sets whether the animation of an animated image plays. It only
+// plays while the paintable is being drawn.
+func (p *Paintable) SetPlaying(playing bool) {
+	if p.playing == playing {
+		return
+	}
+
+	p.playing = playing
+	if !playing {
+		p.stopAnimation()
+	}
+
+	if p.anim != nil {
+		p.InvalidateContents()
+	}
+}
+
+// FetchOnMap fetches the image while the given widget is mapped instead of
+// waiting for the paintable to be drawn. GTK never draws a widget without a
+// size, so widgets that are only sized by the image need this.
+func (p *Paintable) FetchOnMap(widget gtk.Widgetter) {
+	w := gtk.BaseWidget(widget)
+	w.ConnectMap(func() {
+		p.eager = true
+		p.Fetch()
+	})
+	w.ConnectUnmap(func() { p.eager = false })
+	if w.Mapped() {
+		p.eager = true
+		p.Fetch()
+	}
+}
+
+// PlayOnHover plays the animation while the pointer is over the given widget.
+func (p *Paintable) PlayOnHover(widget gtk.Widgetter) {
 	motion := gtk.NewEventControllerMotion()
-	motion.ConnectEnter(func(x, y float64) { c.Start() })
-	motion.ConnectLeave(func() { c.Stop() })
-
-	parent := gtk.BaseWidget(c.parent)
-	parent.ConnectMap(func() {
-		base := gtk.BaseWidget(w)
-		base.AddController(motion)
-	})
-	parent.ConnectUnmap(func() {
-		base := gtk.BaseWidget(w)
-		base.RemoveController(motion)
-	})
+	motion.ConnectEnter(func(x, y float64) { p.SetPlaying(true) })
+	motion.ConnectLeave(func() { p.SetPlaying(false) })
+	gtk.BaseWidget(widget).AddController(motion)
 }
 
-// Avatar is an online variant of adaptive.Avatar.
+func (p *Paintable) stopAnimation() {
+	if p.anim == nil {
+		return
+	}
+
+	if p.anim.next != 0 {
+		glib.SourceRemove(p.anim.next)
+		p.anim.next = 0
+	}
+
+	p.anim.iter = nil
+	p.anim.frame = nil
+}
+
+// currentFrame returns the image to draw, advancing the animation if it is
+// playing.
+func (p *Paintable) currentFrame() gdk.Paintabler {
+	anim := p.anim
+	if anim == nil || !p.playing {
+		return p.image
+	}
+
+	if anim.iter == nil {
+		anim.iter = anim.pixbuf.Iter(nil)
+		anim.frame = gdk.NewTextureForPixbuf(anim.iter.Pixbuf())
+	} else if anim.iter.Advance(nil) {
+		anim.frame = gdk.NewTextureForPixbuf(anim.iter.Pixbuf())
+	}
+
+	// Only draw the next frame after this one is drawn, so the animation stops
+	// once the paintable is no longer shown.
+	if delay := anim.iter.DelayTime(); delay >= 0 && anim.next == 0 {
+		anim.next = glib.TimeoutAdd(uint(max(delay, maxFPSDelay)), func() {
+			anim.next = 0
+			p.InvalidateContents()
+		})
+	}
+
+	return anim.frame
+}
+
+func (p *Paintable) intrinsicWidth() int {
+	if p.image == nil {
+		return 0
+	}
+	return p.image.IntrinsicWidth()
+}
+
+func (p *Paintable) intrinsicHeight() int {
+	if p.image == nil {
+		return 0
+	}
+	return p.image.IntrinsicHeight()
+}
+
+func (p *Paintable) snapshot(snapshot gdk.Snapshotter, width, height float64) {
+	p.Fetch()
+
+	image := p.currentFrame()
+	if image == nil {
+		return
+	}
+
+	// GTK picks the scaling filter itself. Forcing trilinear filtering blurs
+	// HiDPI images, since it mixes in a half-size mipmap whenever the image is
+	// less than twice the drawn size.
+	image.Snapshot(snapshot, width, height)
+}
+
+// Avatar is an adw.Avatar that shows the image of a Paintable. adw.Avatar hides
+// its initials as soon as it has a custom image, so the paintable only becomes
+// the custom image once its image is fetched.
 type Avatar struct {
 	*adw.Avatar
-	base baseImage
+	Paintable *Paintable
 }
 
-// NewAvatar creates a new avatar.
-func NewAvatar(ctx context.Context, p imgutil.Provider, size int) *Avatar {
-	a := Avatar{
-		Avatar: adw.NewAvatar(size, "", true),
+// NewAvatar creates a new Avatar.
+func NewAvatar(ctx context.Context, prov imgutil.Provider, size int) *Avatar {
+	a := &Avatar{
+		Avatar:    adw.NewAvatar(size, "", true),
+		Paintable: NewPaintable(ctx, prov),
 	}
 	a.AddCSSClass("onlineimage")
-	a.base.init(ctx, imageParent{&a, a.Avatar, a.set()}, p)
 
-	return &a
+	// The avatar never draws the paintable before it is the custom image.
+	a.Paintable.FetchOnMap(a.Avatar)
+
+	// The paintable must not hold a strong reference to the avatar, which
+	// holds the paintable.
+	avatar := coreglib.NewWeakRef(a.Avatar)
+	paintable := a.Paintable
+	paintable.ConnectInvalidateSize(func() {
+		a := avatar.Get()
+		if a == nil {
+			return
+		}
+		if paintable.HasImage() {
+			a.SetCustomImage(paintable)
+		} else {
+			a.SetCustomImage(nil)
+		}
+	})
+
+	return a
 }
 
-// SetFromURL sets the Avatar's URL.
+// SetFromURL sets the URL of the avatar's image.
 func (a *Avatar) SetFromURL(url string) {
-	a.base.SetFromURL(url)
-}
-
-// Disable disables the online capability of the avatar, and sets the avatar to
-// the default avatar.
-func (a *Avatar) Disable() {
-	a.base.Disable()
-}
-
-// SetSizeRequest sets the avatar size.
-func (a *Avatar) SetSizeRequest(size int) {
-	a.Avatar.SetSizeRequest(size, size)
-	a.base.scaler.Invalidate()
-}
-
-// EnableAnimation enables animation for the avatar. The controller is returned
-// for the user to determine when to play the animation.
-func (a *Avatar) EnableAnimation() *AnimationController {
-	return a.base.enableAnimation()
-}
-
-func (a *Avatar) set() imgutil.ImageSetter {
-	return imgutil.ImageSetter{
-		SetFromPixbuf: func(pb *gdkpixbuf.Pixbuf) {
-			if pb != nil {
-				texture := gdk.NewTextureForPixbuf(pb)
-				a.Avatar.SetCustomImage(texture)
-			} else {
-				a.Avatar.SetCustomImage(nil)
-			}
-		},
-		SetFromPaintable: a.Avatar.SetCustomImage,
-	}
-}
-
-// type avatarParent struct {
-// 	*gtk.Image
-// 	avatar *Avatar
-// }
-
-// func (a avatarParent) set() imgutil.ImageSetter {
-// 	return imgutil.ImageSetter{
-// 		SetFromPixbuf:    a.avatar.SetFromPixbuf,
-// 		SetFromPaintable: a.avatar.SetFromPaintable,
-// 	}
-// }
-
-// Image is an online variant of gtk.Image.
-type Image struct {
-	*gtk.Image
-	base baseImage
-}
-
-// NewImage creates a new avatar.
-func NewImage(ctx context.Context, p imgutil.Provider) *Image {
-	i := Image{Image: gtk.NewImage()}
-	i.AddCSSClass("onlineimage")
-	i.base.init(ctx, imageParent{&i, &i, i.set()}, p)
-
-	return &i
-}
-
-// SetFromURL sets the Image's URL.
-func (i *Image) SetFromURL(url string) {
-	i.base.SetFromURL(url)
-}
-
-// Disable disables the online capability of the image, turning it into a
-// normal gtk.Image. To re-enable it, call SetURL again.
-func (i *Image) Disable() {
-	i.base.Disable()
-}
-
-// SetSizeRequest sets the minimum size of a widget.
-func (i *Image) SetSizeRequest(w, h int) {
-	i.Image.SetSizeRequest(w, h)
-	i.base.scaler.Invalidate()
-}
-
-// EnableAnimation enables animation for the avatar. The controller is returned
-// for the user to determine when to play the animation.
-func (i *Image) EnableAnimation() *AnimationController {
-	return i.base.enableAnimation()
-}
-
-func (i *Image) set() imgutil.ImageSetter {
-	return imgutil.ImageSetter{
-		SetFromPixbuf:    i.SetFromPixbuf,
-		SetFromPaintable: i.SetFromPaintable,
-	}
-}
-
-// Picture is an online variant of gtk.Picture.
-type Picture struct {
-	*gtk.Picture
-	base baseImage
-}
-
-// NewPicture creates a new Picture.
-func NewPicture(ctx context.Context, prov imgutil.Provider) *Picture {
-	p := Picture{Picture: gtk.NewPicture()}
-	p.AddCSSClass("onlineimage")
-	p.base.init(ctx, imageParent{&p, &p, p.set()}, prov)
-
-	return &p
-}
-
-// SetURL sets the Avatar's URL.
-func (p *Picture) SetURL(url string) {
-	p.base.SetFromURL(url)
-}
-
-// Disable disables the online capability of the picture, turning it into a
-// normal gtk.Picture. To re-enable it, call SetURL again.
-func (p *Picture) Disable() {
-	p.base.Disable()
-}
-
-// SetSizeRequest sets the minimum size of a widget.
-func (p *Picture) SetSizeRequest(w, h int) {
-	p.Picture.SetSizeRequest(w, h)
-	p.base.scaler.Invalidate()
-}
-
-// EnableAnimation enables animation for the avatar. The controller is returned
-// for the user to determine when to play the animation.
-func (p *Picture) EnableAnimation() *AnimationController {
-	return p.base.enableAnimation()
-}
-
-func (p *Picture) set() imgutil.ImageSetter {
-	return imgutil.ImageSetter{
-		SetFromPixbuf:    p.SetPixbuf,
-		SetFromPaintable: p.SetPaintable,
-	}
+	a.Paintable.SetURL(url)
 }

@@ -121,12 +121,18 @@ func New(ctx context.Context, appID, appName string) *Application {
 
 // NewWithFlags creates a new Application with the given application flags.
 func NewWithFlags(ctx context.Context, appID, appName string, flags gio.ApplicationFlags) *Application {
+	return Wrap(ctx, gtk.NewApplication(appID, flags), appName)
+}
+
+// Wrap creates a new Application from an existing gtk.Application, such as an
+// instance of a subclass of it.
+func Wrap(ctx context.Context, application *gtk.Application, appName string) *Application {
 	if ctx == nil {
 		panic("app: given ctx is nil")
 	}
 
 	app := &Application{
-		Application: gtk.NewApplication(appID, flags),
+		Application: application,
 		name:        appName,
 	}
 
